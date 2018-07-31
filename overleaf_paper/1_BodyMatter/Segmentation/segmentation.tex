@@ -1,0 +1,1519 @@
+\chapter{Automatic annotation and scene parsing of UAV imagery and aerial imagery}
+\label{ch:seg}
+Last decade has witnessed a revolutionary success of deep neural networks. With the support of ever-increasing computing power, various deep neural networks have emerged for a wide range of applications and demonstrated significant improvements compared to traditional machine learning methods. Nevertheless, training the networks requires a large amount of ground truth data. While open image databases like ImageNet\cite{Russakovsky2015} and LabelMeFacade\cite{Russell2008} are only applicable for specific scenes, manual image annotating is usually inevitable and costs plenty of time and labor. Therefore increasing importance has been attached to the issue of automatic generation of image annotations. 
+
+The prosperity of remote sensing brings about immense data of different scales and resolutions. The remotely sensed data, collected by a multitude of sensors (e.g., optical, hyperspectral, radar, LiDAR) from different platforms (e.g., satellite, airplane, UAV) and with different temporal intervals, conveys rich information of the scene from varying perspectives. Meanwhile, the coverage of free geographical information such as OSM is expanding rapidly. The way in which the redundant remote sensing data can be fully exploited is raising increasing attentions. In this context, we propose to exploit existing annotated data and incorporate auxiliary information from available remote sensing images to ease the task of image annotating. 
+
+As a bridge between aerial and terrestrial photogrammetry, UAV images contribute to comprehensive representation of the scene. Pixelwise segmentation of UAV imagery is demanded by many applications such as building modeling, however, hand labelling of such a dataset is tedious and time consuming. In view of the fact that aerial images have much larger coverage than UAV images, we seek to propagate the labels from one aerial image to multiple co-registered UAV image. Theoretically, we simply need to annotate one aerial image manually and then transfer the labels to numerous UAV images of the same area, which would dramatically relieve the burden of manual annotation. 
+
+There have been a couple of researches on label propagation, where labels are transferred  from sparse annotated data to a number of target images based on their temporal coherence and appearance similarity, e.g., across video frames or from point cloud to images. In these cases, the source data and target imagery have similar appearance and viewing direction, thus the propagation itself can result in fine image segmentations. In practice, however, such same-source data may not be available. When it comes to multi-source imagery, e.g., from aerial imagery to UAV imagery, the label propagation often suffers from large differences in  scale and view between source and target images and results in sparse, noisy and even wrong annotations. To solve this problem, we leverage geometric and radiometric information as additional features, and our problem can be formulated as how to reasonably infer the image labels given prediction uncertainties of multi-source information. Towards this goal, we introduce in this paper a Bayesian-CRF graphical model for accurate semantic segmentation incorporating features from both 2D images and 3D data. More specifically, the approach consists of three steps: 1. generate sparse weak annotations by propagating labels from existing labeled data; 2. model labeling uncertainties by introducing additional geometric and radiometric evidence via the Bayesian inference; 3. construct a densely connected CRF model on the image domain for label inference. The merits of the proposed method lie in the following aspects: 1. the probabilistic essence of our model allows for flexible incorporation of different types of auxiliary information; 2. our method is able to cope with missing labels and the ``dragging effect" in optical flow and achieves annotations with high semantic accuracy; 3. our method outperforms manual annotating in the aspect of preserving accurate class boundaries.  %joint reasoning of 2D and 3D information given weak annotations.
+
+To verify the generalization and robustness of our method, we leverage it for two different applications: 1. UAV image annotating via label propagation from aerial to UAV imagery; 2. aerial image annotating via label propagation from OSM building footprints. In order to explore the effectiveness of deploying the automatically generated image annotations as pseudo ground truth, we train a deep convolutional neural network using these generated annotations for image segmentation, and compare with segmentation using manual annotations. 
+
+To summarize, the main contributions of this work are:
+\begin{itemize}
+\item We present a novel concept of annotating UAV imagery by transferring the labels from existing annotated aerial imagery.
+\item We propose a Bayesian-CRF graphical model which can flexibly incorporate 2D and 3D features as auxiliary information, yielding refined image annotations. 
+\item We demonstrate the effectiveness of these annotations as pseudo ground truth data for training deep neural works for image segmentation.
+\end{itemize}
+
+The remainder of this paper is organized as follows: Section \ref{sec:related} compares related research work and highlights the innovations of our method. Section \ref{sec:method} describes the proposed framework in details. Section \ref{sec:experiment1} and Section \ref{sec:experiment2} present the applications of the proposed method in different scenarios and report the experimental results with evaluations. Section \ref{sec:disc} interprets the results and describes applicable conditions of the proposed method. Finally, Section \ref{sec:conc} concludes the paper.
+% You must have at least 2 lines in the paragraph with the drop letter
+% (should never be an issue)
+\section{Related work}
+\label{sec:related}
+% In this section, we give an review of related works on label propagation, followed by a brief introduction of CRF model. We also highlight the innovations of our study compared with previous works.
+
+In order to tackle the lack of annotated data, a couple of attempts have been made in automatic generation of image annotations. One option is to generate synthetic data. The emergence of synthetic datasets like Virtual KITTI \cite{gaidon2016virtual} and Synthia \cite{Ros2016synthetic} reveals its potential in generating image annotations on a large scale, but the quality of synthetic data largely relies on the quality of the generative model. Though such models can find regular patterns of the authentic data, they may not be able to generate distinctive and diverse images like realistic data, which is a severe limitation for most training tasks.
+%However, for most training tasks, the synthetic data will severely limit its capabilities and negatively impact the output accuracy. 
+
+An effective way of automatic image annotation is label propagation, i.e., transfer the pixel labels from source data to target images via certain correspondences. A common case is propagation throughout video frames. Naive methods use optical flow to model the frame to frame propagation \cite{chuang2002video} but often suffer from occlusion and reappearance of objects. To handle this problem, more sophisticated appearance models have been proposed, such as local shape models in \cite{Bai2009snapcut}, semantically consistent regions in \cite{arbelaez2009regions} and patch cross-correlation in \cite{badrinarayanan2013semi}. Unstructured classifiers, which predict pixel labels independently without neighborhood constraints, mostly use Random Decision Forests \cite{Breiman2001random} and CRFs to get the unaries. While structured classifiers involve neighborhood information to improve segmentation accuracy. For example, a coupled HMM was proposed in \cite{badrinarayanan2010label} for joint generative modeling of image sequences and their annotation. Some works \cite{Tsai2012motion},\cite{wang2009active} used joint optimization for temporal motion and semantic labels. A mixture of trees probabilistic graphical model was employed in \cite{badrinarayanan2013semi} for temporal association between super-pixels, which can reduce errors caused by short time-window processing in label propagation.
+
+Due to lack of depth information, video-based label propagation approaches are vulnerable to occlusions. In contrast, some methods exploited 3D information as source data for label propagation. For example, the approach presented in \cite{chen2014beat} exploited 3D information including stereo, noisy point clouds, 3D car models as well as appearance models to generate accurate vehicle segmentation. Xiao et al \cite{multiple2009} proposed to generate street view image segmentation by projecting 3D annotations onto image superpixels and optimizing the results in a MRF model. However, as the point cloud was generated from Structure from Motion (SFM), this method still had difficulty in dealing with occlusions. In comparison, the hybrid methods presented in \cite{namin2015multimodal},\cite{Xie2016CVPR} jointly inferred 2D imagery and 3D point clouds in graphical models and demonstrated improvements in the semantic labeling of both modalities. 
+% As we are interested in image annotations, labeling of point cloud is not the main concern, thus we use the 3D data solely as auxiliary evidence rather than an independent domain for the sake of relieving computational burden.
+% As we start from only 2D image annotations and target at generating image annotations, the 3D labeling is not the main concern for us, therefore   
+
+
+Aforementioned methods demonstrate that incorporation of multi-view information can help to improve segmentation accuracy and temporal consistency of annotations, thus, we are inspired to exploit additional radiometric and geometric information for the label propagation task. Nevertheless, existing methods mainly work with label propagation between same-source data, e.g., across video frames or from terrestrial point cloud to street-view images, where the source data and target imagery have high similarity in view and appearance. However, when it comes to multi-view imagery, the labels propagation suffers from view differences between source data and target images, resulting in sparse and erroneous annotations. For instance, building facades in UAV imagery are often invisible in aerial imagery and thus cannot be annotated, direct label propagation would result in missing labels on the facade area of UAV images. We tackle this problem in a different way: assuming that corresponding nodes in 2D and 3D domains have identical labels, we update the unary potential of each node with Bayesian inference given evidence (e.g., height, normal vector, NDVI) from auxiliary data, where the likelihood is empirically estimated based on image statistics. In that example, we can encourage the 3D node whose normal vector is horizontal to be "facade" by assigning them a higher likelihood.   
+
+Learning and inference of CRF models for semantic segmentation have already been discussed by many previous research works. Basic CRF models only consider neighboring pixels or patches \cite{shotton2009textonboost},\cite{fulkerson2009Class}, which cannot handle long-range connections within the image and often lead to over-smoothing at class boundaries. To solve this problem, higher-order CRFs \cite{Kohli2008robust} and hierarchical CRFs \cite{Ladicky2009hierarchical} have been proposed to integrate region-based hierarchical connections and higher-order potentials, yet the accuracy of such methods largely depend on the accuracy of segmented image regions. By contrast, fully connected CRFs incorporate pairwise potentials for all individual pixels in the image, resulting in significantly higher segmentation accuracy. To reduce the computational complexity of inference, the mean-field inference algorithm for fully connected CRF models has been proposed in \cite{crf2012}, where, the pairwise edge potentials are defined as a weighted sum of Gaussian kernels and the message passing is performed using Gaussian filtering in a Euclidean feature space, enabling highly efficient maximum posterior marginal (MPM) inference. To the best of our knowledge, we are the first to employ such CRF models for label propagation between multi-source images.
+% Specifically, loopy belief propagation was proposed in \cite{Ren2008}, tree reweighted belief propagation was described in \cite{choi2013fpga} 
+ 
+
+Despite many works on label propagation, few of them have investigated into the possibility of using the propagated labels as pseudo ground truth for training at scale. A notable exception is the work in \cite{mustikovela2016can}, where a systematic analysis about the quality of PGT was presented and the impact of PGT on training a CNN was discussed. Similarly, the effect of large scale PGT on deep learning based segmentation is investigated in \cite{large2017}. In such cases, the propagated annotations were merely employed as augmented ground truth data and trained together with manually labeled ground truth. By contrast, we demonstrate that the automatic annotations generated by our method can be directly used as ground truth data and achieve comparable accuracy in CNN based segmentation as manual annotations.
+% needed in second column of first page if using \IEEEpubid
+%\IEEEpubidadjcol
+
+\section{Methodology}
+\label{sec:method}
+% In this section, we first formulate our problem, and then give a detailed description of the proposed model.
+Label propagation methods transfer labels from annotated source data to a set of target images. In practice, the source annotated data can be aerial imagery, satellite imagery, OSM data, etc. Here we take the case of label propagation from aerial imagery to UAV imagery as an example.
+
+For existing label propagation methods, the source data and target imagery are temporally coherent and similar in view and appearance, e.g., across video frames or from point cloud to images, where the propagation itself can result in accurate image annotations. In our case, the source and target images differ considerably in the aspects of scale, viewing direction, illumination, etc, as UAV imagery is taken at lower altitude with a more oblique view than in aerial imagery. Consequently, the label propagation often results in sparse, noisy and erroneous annotations. In this context, our task can be formulated as a weakly supervised image segmentation problem. 
+
+Figure \ref{fig:eichenau_transferred} shows an example of the annotations of UAV imagery transferred from aerial imagery, many labels are missing at occluded regions, especially at building facades. Such missing labels are difficult to identify using only color and texture information, but can be distinguished based on auxiliary geometric and 3D features. Intuitively, normal vectors of building facades are generally horizontal while those of the ground are vertical, roofs are expected to be higher than cars, and vegetations appear deeper red in the near-infrared band. The implicit mathematical essence behind is that each object has a distinctive distribution regarding a certain geometric or radiometric attribute. Such distributions, if properly incorporated as auxiliary features, can substantially contribute to a better segmentation accuracy. To this end, we incorporate these auxiliary features from available remote sensing data, and construct a densely connected Bayesian-CRF model to reason about the labels based on evidence. 
+% In order to explain our methodology more concretely. So the procedure of label transfer will be omitted in this chapter and explained in Section \ref{sec:experiment1}, here we take the case of label propagation from aerial imagery to UAV imagery as an example. By contrast, we aim to generate UAV image annotations by transferring labels from aerial imagery to UAV imagery.
+
+
+\subsection{Model}
+A CRF can be seen as a Markov Random Field (MRF) globally conditioned on the data. In the context of image segmentation, a CRF models pixel labels as random variables which have a Markov property and are conditioned upon the image.
+
+More formally, for an input image of size N, consider a set of random variables $\mathbf{X} = \{X_1,\dots, X_N\}$ ranging over the image, where $X_i$ denote the label assigned to pixel $i$ and the value is taken from a set of pre-defined semantic labels $\mathcal{L} = \{l_1, \dots, l_K\}$. For a global observation (image) $\mathbf{I}$, consider a graph $G = \left(V, E\right)$, where $V = \{X_1,\dots, X_N\}$, the pair (\textbf{I}, \textbf{X}) can be modeled as a conditional random field which is characterized by a Gibbs distribution $P\left(\textbf{X}=\textbf{x} \mid \textbf{I}\right) = \frac{1}{Z\left(\textbf{I}\right)} \exp \left( - E\left(\textbf{x} \mid \textbf{I}\right)\right)$, where $\mathbf{x} \in \mathcal{L}$ and $Z\left(\textbf{I}\right)$ is the partition function. Assume the conditional random field ($\mathbf{I},\mathbf{X}$) is fully connected, the energy of a label assignment $\textbf{x}$ is specified as:
+
+% More formally, for input images of size N, consider a random field $\mathbf{I} = \{I_1,\dots, I_N\}$ ranging over image pixels, $I_j$ denote the color value of pixel $j$. Consider also a random field $\mathbf{X} = \{X_1,\dots, X_N\}$ ranging over pixel-wise labels, $X_j$ denote label of pixel $j$. Let $\mathbf{L} = \{l_1, \dots, l_k\}$ denote the domain the set of labels. Assume the conditional random field ($\mathbf{I},\mathbf{X}$) is fully connected, its corresponding Gibbs energy is specified as:
+\begin{align} \label{eq:1}
+E\left(\mathbf{x}\right) &= \sum_{i}^{} \psi_u\left(x_i\right) + \sum_{i<j}^{} \varphi_p\left(x_i,x_j\right)
+\end{align}
+
+% \begin{figure}[htb]
+%     \centering
+%        \begin{subfigure}[b]{1\linewidth}
+% 	       \centering
+% 			\input{fig/eichenau/graph.tikz}%
+			
+%        \end{subfigure}
+%        \caption{Proposed graph model.}
+%        \label{fig:graph}
+% \end{figure}
+The unary potentials $\psi_u\left(x_i\right)$ encode the probability of a pixel $i$ taking label $x_i$. In our case, pixel-wise label assignment probabilities are initially defined according to the accuracy  $p$ of the transferred weak annotations. For instance, for an image segmentation task in five categories $\{Building, Ground, Vegetation, Car, Clutter\}$, we believe the transferred annotations have 80\% accuracy, i.e., the value of $p$ is set to 0.8. If a pixel is labeled as $Ground$ in the transferred annotation, then the prior label assignment probability for this pixel is represented as a vector of probabilities for each class: $\{0.05, 0.8, 0.05, 0.05, 0.05\}$. In case the pixel is not assigned any label, the a priori of label assignment is set to the average value: $\{0.2, 0.2, 0.2, 0.2, 0.2\}$. % Due to occlusions, however, some pixels may have wrong labels, no labels or multiple labels, especially for classes \textit{Building} and \textit{Car}. To solve this problem, we exploit geometric information embedded in 3D points such as height and normal vectors. At ambiguous regions, these complimentary features can help to distinguish different classes. In parallel, the energy of each node is simultaneously affected by the evidence of additional features. 
+Further, the pixel-wise label assignment probabilities are then updated via Bayesian inference given additional evidence. More specifically, given a sequence of independent and identically distributed evidence features (e.g., height, normal vector, spectral information): $\mathbf{O} = \{O_1, \dots, O_m\}$, where $m$ stands for the number of features. 
+% As illustrated in Figure \ref{fig:graph}, blue nodes represent pixel labels fully connected with each other, green nodes stand for additional geometric features $\{O^1_i,\dots,O^m_i\}$. 
+Let $P\left(\mathbf{x}\right)$ denote the prior belief of the transferred annotation and $P\left(\textbf{O}\mid \mathbf{x}\right)$ denote the likelihood of observing $\textbf{O}$ given category $\mathbf{x}$. In our experiment, the value of $P\left(\textbf{O}\mid \mathbf{x}\right)$ is empirically defined based on image statistics. The posterior probability of label assignment $\mathbf{x}$ for given evidence set $\mathbf{O}$ can be inferred based on Bayes' theorem \cite{gelman2013bayesian}:
+\begin{equation}
+\label{eq:2}
+%\varphi_p\left(x_i\mid O \right) = \frac{P(O \mid x_i)P\left(xi\right)}{P(O)}
+% P\left(x_i\mid O^1_i,\dots,O^m_i \right) = \frac{1}{Z}P\left(x_i\right)\prod_{j=1}^{m}P\left(O^j_i \mid x_i\right)
+P\left(\mathbf{X}=\mathbf{x}\mid \mathbf {\mathbf{O}} \right)=\frac {P\left(\mathbf {O} \mid \mathbf{x}\right)}{\sum_{\mathbf{x}\in \mathcal{L}}{P\left(\mathbf {O} \mid \mathbf{\mathbf{x}}\right)P\left(\mathbf{x}\right)}}\cdot P\left(\mathbf{x}\right)
+\end{equation}
+where, 
+\begin{equation}
+\label{eq:3}
+P\left(\mathbf {O} \mid \mathbf{x}\right)=\prod _{m}{P\left(O_m\mid \mathbf{x}\right)} 
+%\varphi_p\left(x_i\mid O \right) = \frac{P(O \mid x_i)P\left(xi\right)}{P(O)}
+% Z = P\left(O\right) = \sum_{i=1}^{N}P\left(x_i\right)P\left(O \mid x_i\right)
+\end{equation}
+
+
+% For the sake of notation consistency, we will use $\psi_u\left(x_i\right)$ instead of $P\left(X\mid O \right)$ in the following part of text.
+
+Pairwise potentials $\varphi_p\left(x_i, x_j\right)$ encode the cost to assign labels $x_i, x_j$ to pixels $i, j$ respectively, the data-dependent term encourages semantic label coherence of similar pixels. Following the settings in \cite{crf2012}, we model the pairwise term as weighted contrast-sensitive Gaussian edge kernels: 
+% \begin{equation}
+\begin{multline} \label{eq:4}
+%\varphi_p(x_i,x_j) &= \mu(x_i,x_j) \sum_{m=1}^{K} \omega ^{(m)}\kappa ^{(m)}(f_i,f_j),
+\varphi_p\left(x_i,x_j\right) = \omega_1\left(x_i,x_j\right) exp\left(-\frac{\mid p_i-p_j\mid ^2}{2{\theta_\gamma}^2}\right) \\
+ +\omega_2\left(x_i,x_j\right) exp\left(-\frac{\mid p_i-p_j\mid ^2}{2{\theta_\alpha}^2} -\frac{\mid c_i-c_j\mid ^2}{2{\theta_\beta}^2} \right)
+\end{multline}
+% \end{equation}
+where $c_i$ and $p_i$ represent the color vector and position of pixel $i$ respectively, $\omega_1$ and $\omega_2$ parametrizes the weights of pairwise features and are both set to 1 in our model. Further, $\theta_\alpha$, $\theta_\beta$ and $\theta_\gamma$ control the degree of nearness, similarity and smoothness and are set to 25, 10, 3 respectively in our model.
+%The parameter values in our experiment are 20, 8, 3 respectively.
+% The parameter values in our experiment are $\theta_\alpha = 20$, $\theta_\beta=8$, $\theta_\gamma=3$ respectively.
+
+The pseudo code of the proposed method is listed in Table \ref{tab:pseudo}, which demonstrates the general pipeline and explains the Bayesian-based inference in details. 
+\begin{algorithm}
+\caption{Bayesian-CRF Based Image Annotation}\label{tab:pseudo}
+     \textbf{Input:} Image $\mathbf{I}$, degree of belief for the transferred annotations $p$, number of categories $K$, auxiliary evidence set $\mathbf{O}$, likelihood function $P\left(\mathbf{O}\mid \mathbf{x}\right)$\\
+     \textbf{Output:} Pixel-wise annotation of image $\mathbf{I}$
+    \begin{algorithmic}[1]
+    \Procedure{Update pixel unary potentials based on additional measurement}{}
+      \For{each pixel $i$ in $\mathbf{I}$}      
+        \State $O \gets$ observation measurement for this pixel.
+        \State $P\left(x_i\right) = [P_1,\dots,P_K]^{T} \gets $ prior label assignment probability of this pixel.
+     	\If {pixel $i$ is not assigned any label via transferring}
+         \State $P\left(x_i\right) = [\frac{1}{K},\dots,\frac{1}{K}]^{T}$.
+      	\Else        
+     	\State $k \gets$ index number of transferred label.
+     	\For {each $P_j (j=1,\dots,K)$ in vector $P\left(x_i\right)$}
+        \If {$j \neq k$}
+        $P_j = \frac{1-p}{n-1}$
+        \Else 
+        \State $P_j = p$
+        \EndIf
+        \EndFor
+        
+     	\EndIf
+%         \For{each per-class a priori $P_j$ in $P$}
+%         \State $P\left(O \mid x\right) \gets $ likelihood of the measurement $O$ for given class $x$.  
+    	\State $P\left(x_i\mid O\right) = \frac{P\left(x_i\right)\cdot P\left(O \mid x_i\right)}{P\left(O\right)} \gets $ posterior label assignment probability updated by Bayes' theorem.
+%         \EndFor
+      \EndFor
+      \State
+%     \State $\textit{stringlen} \gets \textit{length of } \textit{string}$
+%     \State $i \gets \textit{patlen}$
+%     \BState \emph{top}:
+%     \If {$i > \textit{stringlen}$} \Return false
+%     \EndIf
+%     \State $j \gets \textit{patlen}$
+%     \BState \emph{loop}:
+%     \If {$\textit{string}(i) = \textit{path}(j)$}
+%     \State $j \gets j-1$.
+%     \State $i \gets i-1$.
+%     \State \textbf{goto} \emph{loop}.
+%     \State \textbf{close};
+%     \EndIf
+%     \State $i \gets i+\max(\textit{delta}_1(\textit{string}(i)),\textit{delta}_2(j))$.
+%     \State \textbf{goto} \emph{top}.
+    \EndProcedure
+    
+    \Procedure{Semantic inference in CRF model}{}
+%     \State $\mathbf{I} = \{I_1,\dots, I_N\} \gets$ a random field  defined over $\mathbf{M}$
+    \State $ E =$ pixel unary potentials + pixel pairwise potentials$\gets$  Gibbs energy function 
+    \State Inference by minimizing $E$ 
+    \EndProcedure 
+    \end{algorithmic}
+    \end{algorithm}
+
+
+\subsection{Inference}
+\label{method:infer}
+The inference problem is basically to find the label assignment $\mathbf{x}$ with the maximum a posteriori (MAP) of a random field for the given image $\mathbf{I}$, i.e., $X\ast = argmax_{\mathbf{x}\in\mathcal{L}}P(\mathbf{x}\mid \mathbf{I})$, and can be achieved by minimizing the Gibbs energy function $E\left(\mathbf{x}\right)$. The time for solving the maximization of these marginals is exponential in the size of $\mathbf{I}$ and thus computationally intractable. Therefore we employ the mean field approximation for the maximum posterior marginal inference, i.e., approximating the exact CRF distribution $P(\mathbf{X})$ with a factorized distribution $Q(\mathbf{X}) = \prod_{i}Q_i(X_i)$ that minimizes the KL-divergence $D(P\|Q)$. The mean field approximation can be performed using Gaussian filtering in feature space efficiently \cite{crf2012}.
+
+% \subsection{Learning}
+% We learn the parameters by maximum likelihood, i.e., the parameters setting should have highest probability given the training data. However, maximum likelihood training of a CRF model is intractable in general cases. So we resort to approximate inference methods, as discussed in Section \ref{method:infer}. 
+
+% In order to estimate the parameters, we compute the marginal distribution for each edge. 
+% In the end, the parameters in our CRF model are learned via minimization of the Gibbs energy defined in Eq. 
+
+\section{image annotation via label propagation from aerial imagery to UAV imagery}
+\label{sec:experiment1}
+In this section, we leverage the proposed method to generate pseudo ground-truth data for training. The experiments are comprised two aspects: 1. image annotating via label propagation from aerial imagery to UAV imagery, 2. training a CNN using the generated annotations. We describe data acquisition, introduce experiment settings, present and evaluate the results. 
+%2.automatic building annotation of aerial images using OSM footprint. 
+
+%\subsection{Experiment 1: automatic image annotation via label propagation}
+\subsection{Data Description}
+As shown in Figure \ref{fig:site}, this dataset consists of two subsets: \textbf{Area 1} was acquired over \texttt{Eichenau}, a small village in Germany. It is characterized by dense anthropogenic structures such as traditional-style houses, dense vegetations, roads and moving cars; \textbf{Area 2} was acquired over a nearby village \texttt{Unterroggenstein}, including a few detached buildings along the roadside. 
+
+Image data were taken on November $2^{nd}$, 2015. In particular, UAV imagery was captured by a Sony Nex-7 camera at an altitude of $100m$ above ground with a slightly oblique view. The average Ground Sampling Distance (GSD) of UAV images is 1.8cm and the image size is $6000 \times 4000$ pixels; aerial imagery was acquired by the DLR 4k sensor system \cite{kurz2014performance} at an altitude of $600m$ above ground, including two Canon EOS-1DX cameras with 15$^\circ$ sidewards looking angle and a FOV of 75$^\circ$ across. The aerial imagery has an average GSD of 20cm and size of $5184 \times 3456$ pixel. \textbf{Area 1} is covered by both aerial imagery and UAV imagery while \textbf{Area 2} is only covered by UAV imagery. 
+Detailed characteristics of the datasets are listed in Table \ref{tab:dataset}.
+\begin{table}[htb]
+\centering
+\begin{tabular}{cccccc}
+\toprule
+Imagery  & Date & Size (pixels) & Height (m) & GSD (cm) & Pitch ($^{\circ}$) \\
+\midrule
+Aerial  & 11/2015 & $5184 \times 3456$ & 600 & 8.4 & 15 \\
+UAV     & 11/2015 & $6000 \times 4000$ & 100 & 1.8 & 10\\
+\bottomrule
+\end{tabular}
+\caption{Characteristics of the datasets used in the experiment.}
+\label{tab:dataset}
+\end{table}
+
+We defined six classes for this dataset, i.e., \textit{Building}, \textit{Roof}, \textit{Ground}, \textit{Vegetation}, \textit{Car} and \textit{Clutter}. Where, class \textit{Building} refers to building facades; class \textit{Roof} refers to roofs (including overhangs); class \textit{Ground} refers to bare grounds and roads; class \textit{Vegetation} includes trees, bushes and grassland; class \textit{Car} includes all types of vehicles; the rest categories and indistinguishable objects belong to class \textit{Clutter}. The color coding for labels is illustrated in Figure \ref{fig:colorbar_ei}.
+\begin{figure}[htb]
+    \centering
+\begin{subfigure}{0.9\columnwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/eichenau/colorbar.JPG}
+\end{subfigure} 
+\caption{Color coding used for label propagation from aerial to UAV imagery}
+       \label{fig:colorbar_ei}
+\end{figure} 
+
+From \textbf{Area 1}, two aerial images were manually annotated as source-data for label propagation, costing about 60-90 minutes per frame; in order to compare with the automatically inferred annotations, we manually labeled 28 UAV images as ground-truth data, costing about 20-30 minutes per frame, and then split them into 23 training samples and 5 testing samples. \textbf{Area 2} is only used for testing.
+
+\begin{figure}[htb]
+    \centering
+       \begin{subfigure}[b]{1\linewidth}
+	       \centering
+			\includegraphics[width=0.8\textwidth]{fig/eichenau/site.JPG}
+       \end{subfigure}
+       \caption{Location of two survey sites \textbf{Area 1} (Eichenau) and \textbf{Area 2} (Unterroggenstein), Germany.}
+       \label{fig:site}
+\end{figure} 
+
+\subsection{Data Pre-processing}
+A high co-registration accuracy is vital to the label propagation between multi-source image data. As the UAV images in our dataset exhibit a much lower geolocalization accuracy than aerial images, we adopted the approach proposed in \cite{zhuo2017automatic} for co-registration between UAV and aerial images. In short, the method assumes that the aerial images are geo-referenced and have common overlap with UAV images. First, the camera poses of sequential UAV images are solved via Structure From Motion (SFM), and then the nadir UAV images are matched with the aerial images using the proposed matching scheme and generate thousands of reliable image correspondences. Given accurate camera poses of the aerial images, the 3D coordinates of those common image correspondences can be calculated via image-to-ground projection. These 3D points are then adopted to estimate the camera poses of the corresponding nadir-view UAV images. In the end, those UAV images with known camera poses are involved in a global optimization for camera poses of all UAV images. In this way, all UAV images are co-registered to the aerial images with pixel-level registration accuracy. Afterward, we reconstruct UAV point cloud and Digital Surface Model (DSM) using software \textit{Pix4Dmapper Pro} (version 4.0.25), and then generate a heightmap for each UAV image by deriving heights from the DSM.
+
+Annotated pixels in aerial imagery can be transferred to UAV imagery based on their orientation parameters. However, individual aerial imagery does not present the same scene as UAV imagery due to their temporal difference and differences in viewing direction, scale, resolution and illumination, etc. For instance, building facades in UAV images maybe not or only partially visible in aerial images. Thus we labeled two aerial images, one left-view and one right-view, to achieve more complete representation of the scene. Figure \ref{fig:3k_uav} depicts an oblique UAV imagery and the corresponding region in left-view and right-view aerial images. It can be seen that the combination of the two views can compensate for the view difference to some extent. 
+% yet there are still substantial differences between the UAV and aerial imagery such as scale, resolution and illumination, which are quite challenging for the label propagation task. 
+
+\begin{figure}[htb]
+\begin{minipage}[b]{0.32\linewidth}
+  \centering
+  \centerline{\epsfig{figure=fig/eichenau/DSC00838.JPG,width=2.8cm}}
+  \centerline{(a)}
+\end{minipage}
+\begin{minipage}[b]{0.32\linewidth}
+  \centering
+  \centerline{\epsfig{figure=fig/eichenau/R0414_crop.png,width=2.8cm}}
+  \centerline{(b)}
+\end{minipage}
+\hfill
+\begin{minipage}[b]{0.32\linewidth}
+  \centering
+  \centerline{\epsfig{figure=fig/eichenau/R0845_crop.png,width=2.8cm}}
+  \centerline{(c)}
+\end{minipage}
+\hfill
+\caption{Comparison of aerial imagery and UAV imagery. (a) UAV image, (b) corresponding region in left-view aerial image, (c) corresponding region in right-view aerial image}
+\label{fig:3k_uav}
+\end{figure}
+
+% The two selected aerial images were manually labeled to five main categories: \textit{Building}, \textit{Roof}, \textit{Ground}, \textit{Low vegetation} and \textit{Car}. A few indistinguishable objects were labeled as \textit{Clutter} and will be ignored in training. 
+
+
+\subsection{Label Transfer}
+As explained in Section \ref{sec:method}, we use the UAV point cloud as a mediator for label propagation. To be more specific, we project all the 3D points into a labeled aerial image, thus all the non-occluded points get labeled, and then we project these 3D points into UAV images, transferring their labels to corresponding image pixels. Figure \ref{fig:color_pc} illustrates the labeled UAV point cloud, where, (a) shows labels transferred from the left-view aerial image and (b) shows labels transferred from the right-view aerial image. It can be seen that the combination of two aerial images contributing to more enriched and complete representation of the scene.     
+
+\begin{figure}[H]
+\begin{subfigure}{0.49\columnwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/eichenau/pc_colored_l.JPG}
+  \caption{}
+
+\end{subfigure}
+\begin{subfigure}{0.49\columnwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/eichenau/pc_colored_r.JPG}
+  \caption{}
+
+% \end{subfigure}
+% \begin{subfigure}{1\columnwidth}
+%   \centering
+%   \includegraphics[width=1\linewidth]{fig/colorbar.JPG}
+
+\end{subfigure}
+\caption{Annotated UAV point cloud with labels transferred from aerial images. (a) labels transferred from the left-view image, (b) labels transferred from the right-view image}
+\label{fig:color_pc}
+\end{figure}
+
+
+It has to be noted that there are slight temporal differences between the two aerial images, therefore a common 3D point in two labeled point clouds may carry different labels. Besides, occlusions and manual labeling mistakes also lead to label inconsistencies between two point clouds. Figure \ref{fig:eichenau_transferred} illustrates a UAV image with labels projected from the two labeled point clouds, where examples of label inconsistencies are highlighted. To tackle this problem, we refine the weak annotation via the proposed Bayesian-CRF model, as described in the following.
+
+
+\begin{figure}[htb]
+ \begin{subfigure}{0.485\columnwidth}
+   \centering
+\begin{tikzpicture}
+    \node[inner sep=0pt] (ima) at (0,0) {\includegraphics[width=1\columnwidth]{fig/eichenau/DSC00826_l.png}};
+         \draw[cyan,very thick,rounded corners] (-1.5,0.7) ellipse (0.5 and 0.3);
+         \draw[rotate=45,pink,very thick,rounded corners] (0.8,-0.6) ellipse (0.6 and 0.3); 
+     %\end{scope}    
+ \end{tikzpicture}
+   \caption{}  
+ \end{subfigure}
+~
+ \begin{subfigure}{0.485\columnwidth}
+   \centering
+ \begin{tikzpicture}
+\node[inner sep=0pt] (imb) at (0.5\columnwidth,0) {\includegraphics[width=1\columnwidth]{fig/eichenau/DSC00826_r.png}};
+     \begin{scope}[xshift=0.5\columnwidth]
+         \draw[cyan,very thick,rounded corners] (-1.5,0.7) ellipse (0.5 and 0.3);    
+         \draw[rotate=45,pink,very thick,rounded corners] (0.8,-0.6) ellipse (0.6 and 0.3);
+     \end{scope}       
+\end{tikzpicture}
+   \caption{}  
+ \end{subfigure}
+ 
+% \begin{subfigure}{0.48\columnwidth}
+%   \centering
+%   \includegraphics[width=1\linewidth]{fig/DSC00826_l.png}
+%   \centerline{(a) }  
+% \end{subfigure}
+% \begin{subfigure}{0.48\columnwidth}
+%   \centering
+%   \includegraphics[width=1\linewidth]{fig/DSC00826_r.png}
+%   \centerline{(b) }
+% \end{subfigure}
+\caption{A UAV image with labels transferred from two-view aerial images. (a) labels transferred from left-view aerial image, (b) labels transferred from right-view aerial image. Highlighted areas indicate label inconsistency.}
+\label{fig:eichenau_transferred}
+\end{figure}
+
+
+\subsection{Inference}
+\subsubsection{3D Point Unary Potentials}The 3D point unary potentials can be derived from either a hard manual labeling or a probability distribution computed by a pixel-wise classifier such as MRF or the softmax function of a CNN. In our case, we obtain the unary potential of each 3D point from the labeling of the point cloud. 
+
+More formally, let $\mathbf{P}$ denote the set of non-occluded 3D points in the input UAV point cloud and $s_i$ denote the label assigned to each point $i\in \mathbf{P}$. The domain of each variable $s_i$ is a set of labels $\mathcal{L} = \{l_1, \dots, l_K\}$, where $K$ denotes the number of classes. In our case, $K = 6, \mathcal{L} = $\big\{\textit{Building}, \textit{Roof}, \textit{Ground}, \textit{Vegetation}, \textit{Car} and \textit{Clutter}\big\}. 
+
+% We project all non-occluded points of the point cloud into a labeled aerial image,the label of each 3D point $s_i$ is encouraged to be the same as the label of the corresponding image pixel $l_0$. In view of the errors of manual labeling and the misalignment between aerial imagery and UAV point cloud, we describe the accuracy of the transferred labels with a subjective possibility $p$, which is set to 0.8 in our experiment. Then the probability of a 3D point $i$ ($i\in \mathbf{P}$) taking the label $s_i$ is: 
+% \begin{equation}
+% \label{eq:5}
+% P\left(s_i\right)=\left\{
+% \begin{array}{lcl}
+% p & & {s_i = l_0}\\
+% \frac{\left(1-p\right)}{n-1} & & {s_i \neq l_0}
+% \end{array} \right.
+% \end{equation}
+
+% More specifically, let $\mathbf{S}$ denote the set of 3D points in the UAV point cloud and $\mathbf{L^N}$ denote the set of $N$ labels, i.e., \big\{\textit{Building}, \textit{Roof}, \textit{Ground}, \textit{Low vegetation} and \textit{Car}\big\} in our case. Meanwhile, let $l_s$ denote the semantic labeling of the point $s$ from the labeled point cloud with the confidence probability $p$. Assume the labels are propagated from aerial image $k$, $\psi_u^k\left(s_l\right)$ encodes the likelihood of a 3D point $s$ ($s\in \mathbf{S}$) taking the label $l \left(l \in \mathbf{L^N}\right)$, which is defined as:
+
+% \begin{equation}
+% \label{eq:5}
+% \psi_u\left(s_l\right)=\left\{
+% \begin{array}{lcl}
+% p & & {l = l_s}\\
+% \frac{\left(1-p\right)}{N-1} & & {l \neq l_s}
+% \end{array} \right.
+% \end{equation}
+
+It needs to be noted that the labeling of UAV point cloud can be transferred from multiple labeled aerial images. Assume we project all non-occluded points of the point cloud into $n$ (in our settings $n = 2$) annotated aerial images to transfer labels, each 3D point is therefore assigned with $n$ sets of labels and the corresponding prior label assignment probabilities are denoted by $P\left(s_i^1\right), \dots, P\left(s_i^n\right)$. In order to combine the information from multiple views, we fuse the potentials by taking the average value
+
+\begin{equation}
+\label{eq:6}
+P\left(s_i\right)=\frac{\sum_{j=1}^{n}P\left(s_i^j\right)}{n}
+\end{equation}
+
+\subsubsection{Pixel Unary Potentials}Pixel unary potential encodes the probability of a image pixel $i$ taking label $x_i$. Based on the assumption that image pixels should carry the same labels with corresponding points in 3D space, we project all the labeled 3D points of the UAV point cloud into UAV images to transfer the labels of 3D points to corresponding image pixels. Since our 3D point cloud is generated via interpolation and has higher spatial resolution than UAV image, each pixel in the UAV image corresponds to multiple 3D points which may carry different labels. For a pixel $i$ on the UAV image, Let \big\{$P\left(s_1\right), \dots, P\left(s_m\right)$\big\} denote the set of the prior probabilities of corresponding 3D points, where $m$ denote the number of 3D points which are projected onto this pixel. The prior probability of a image pixel $i$ taking label $x_i$ is assigned the average a priori of corresponding 3D points, i.e., 
+\begin{equation}
+\label{eq:7}
+P\left(x_i\right)=\frac{\sum_{j=1}^{m}P\left(s_j\right)}{m}
+\end{equation}
+Where, $P\left(x_i\right)$ is namely the prior belief in Equation \ref{eq:3}.
+
+
+Given additional evidence, the label assignment probabilities are then updated using the Bayesian rule. In this experiment, we exploited the geometric information, i.e., the relative height above the ground, which was obtained by ground filtering using the Top-hat algorithm \cite{Mongus2012tophat}. The likelihood of observation on height for given class, denoted by $P\left(H \mid \mathbf{x}\right)$ ($H$ is namely an instance of $\mathbf{O}$ in Equation \ref{eq:3}), is empirically estimated based on image statistics. Since height is continuous, $P\left(H \mid \mathbf{x}\right)$ is specified as the probability density function of $H$ for given class. In our settings, we model the probability density function as a normal distribution. In complicated cases, e.g., \textit{Vegetation} include trees and grassland which have different distribution on height, we then model the likelihood function as a weighted sum of normal distributions, i.e., $f(H;\mu ,\sigma ^{2}) = \sum \omega_i\frac {1}{\sqrt {2\pi \sigma_i ^{2}}}e^{-\frac {(H-\mu_i )^{2}}{2\sigma_i ^{2}}}$. A visualization of the likelihood functions is illustrated in Figure \ref{fig:ei_distrib}, and the parameter settings are listed in Table \ref{tab:ei_para_h}. Besides, considering \textit{roof} is generally higher than 2 meters, we set its lower bound of height as 2m; since \textit{building} (facades) has no height measurements on the heightmap, their prior labeling probabilities were not updated via Bayesian inference. The hyperparameters (e.g., $\omega, \mu ,\sigma$) for the probability density functions were manually tuned in the experiment. According to our experience, the performance of inference is not sensitive to the parameter setting as long as they reasonably describe the reality.  
+
+\begin{figure}[htb]
+    \centering
+       \begin{subfigure}{0.95\columnwidth}
+	       \centering
+           \includegraphics[width=\linewidth]{fig/eichenau/ei_height}	
+       \end{subfigure}      
+       \caption{Probability distribution of height for \textbf{Area 1}.}
+       \label{fig:ei_distrib}
+\end{figure}
+
+\begin{table}[htbp]
+  \centering
+  \caption{Parameter settings of probability distribution functions for height, Eichenau Dataset.}
+    \begin{tabular}{c|c|c|c|c|c|c}
+    \hline
+    \textbf{Parameter} & \textbf{Ground} & \textbf{Roof} & \textbf{Car}  & \textbf{Clutter} & \multicolumn{2}{c}{\textbf{Vegetation}} \\
+    %Define if appropriate
+          
+    \hline
+    $\omega$     & 2     & 1     & 1     & 0.5  &1  & 0.5\\
+    
+    $\mu$     & 0     & 7   & 1.3     & 0.5  &3  & 7\\
+    
+    $\sigma$ & 0.5   & 3  & 0.6     & 0.5  &1  & 3\\
+    \hline
+    \end{tabular}%
+  \label{tab:ei_para_h}%
+\end{table}%
+
+\subsubsection{Inference}We performed inference of the CRF model based on the implementation\footnote{https://github.com/lucasb-eyer/pydensecrf} of \cite{crf2012}. In Figure \ref{fig:ei_inference}, column (a) depicts a few examples of automatically generated annotations while column (b) shows corresponding manually labeled annotations. It can be seen that the inferred annotations have high semantic accuracy and conform well to the image gradients at class boundaries, outperforming the manual labeling especially for objects with irregular shapes such as trees. 
+
+There are also a few errors in the inferred annotations, which are caused by three major factors: 1. low contrast in dark or shaded areas; 2. strong gradient at shadow boarders; 3. wrong height value (especially for moving cars). Therefore it is recommended to apply the proposed method for annotating static objects on shadow-free images.
+
+\begin{figure}[htb]
+\begin{subfigure}{0.49\columnwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/overlay/DSC00798_auto_lay.png}
+  \label{fig:sfig1}
+\end{subfigure}\hfill
+\vspace{-0.35\baselineskip}
+\begin{subfigure}{0.49\columnwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/overlay/DSC00798_manual_lay.png}
+  \label{fig:sfig1}
+\end{subfigure}
+\vspace{-0.35\baselineskip}
+
+% \begin{subfigure}{0.49\columnwidth}
+%   \centering
+%   \includegraphics[width=1\linewidth]{fig/overlay/DSC00809_auto_lay.png}
+%   \label{fig:sfig1}
+% \end{subfigure}\hfill
+% \begin{subfigure}{0.49\columnwidth}
+%   \centering
+%   \includegraphics[width=1\linewidth]{fig/overlay/DSC00809_manual_lay.png}
+%   \label{fig:sfig1}
+% \end{subfigure}
+% \vspace{-0.5\baselineskip}
+
+% \begin{subfigure}{0.49\columnwidth}
+%   \centering
+%   \includegraphics[width=1\linewidth]{fig/overlay/DSC00818_auto_lay.png}
+%   \label{fig:sfig1}
+% \end{subfigure}\hfill
+% \begin{subfigure}{0.49\columnwidth}
+%   \centering
+%   \includegraphics[width=1\linewidth]{fig/overlay/DSC00818_manual_lay.png}
+%   \label{fig:sfig1}
+% \end{subfigure}
+% \vspace{-0.5\baselineskip}
+
+% \begin{subfigure}{0.49\columnwidth}
+%   \centering
+%   \includegraphics[width=1\linewidth]{fig/overlay/DSC00830_auto_lay.png}
+%   \label{fig:sfig1}
+% \end{subfigure}\hfill
+% \vspace{-0.35\baselineskip}
+% \begin{subfigure}{0.49\columnwidth}
+%   \centering
+%   \includegraphics[width=1\linewidth]{fig/overlay/DSC00830_manual_lay.png}
+%   \label{fig:sfig1}
+% \end{subfigure}
+% \vspace{-0.35\baselineskip}
+
+\begin{subfigure}{0.49\columnwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/overlay/DSC00847_auto_lay.png}
+  \label{fig:sfig1}
+\end{subfigure}\hfill
+\vspace{-0.35\baselineskip}
+\begin{subfigure}{0.49\columnwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/overlay/DSC00847_manual_lay.png}
+  \label{fig:sfig1}
+\end{subfigure}
+\vspace{-0.35\baselineskip}
+
+\begin{subfigure}{0.49\columnwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/overlay/DSC00852_auto_lay.png}
+\vspace{-0.35\baselineskip}
+  \label{fig:sfig1}
+  \caption{}
+\end{subfigure}\hfill
+\begin{subfigure}{0.49\columnwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/overlay/DSC00852_manual_lay.png}
+\vspace{-0.35\baselineskip}
+  \label{fig:sfig1}
+  \caption{}
+\end{subfigure}
+
+\caption{Comparison of inferred image annotations (a) and manual annotations (b) overlaying on original UAV images.}
+\label{fig:ei_inference}
+\end{figure}
+
+% \begin{figure}[h]
+% \begin{minipage}[b]{0.32\linewidth}
+%   \centering
+%   \centerline{\epsfig{figure=fig/DSC00835.png,width=2.4cm}}
+%   \centerline{(a)}
+% \end{minipage}
+% \hfill
+% \begin{minipage}[b]{0.32\linewidth}
+%   \centering
+%   \centerline{\epsfig{figure=fig/DSC00835.JPG,width=2.4cm}}
+%   \centerline{(b)}
+% \end{minipage}
+% \hfill
+% \begin{minipage}[b]{0.32\linewidth}
+%   \centering
+%   \centerline{\epsfig{figure=fig/DSC00835_anno.png,width=2.4cm}}
+%   \centerline{(c) }
+% \end{minipage}
+% \caption{Comparison of transferred annotations with manual annotations. (a) is automatic annotation and (c) is manual annotation, (b) is corresponding UAV image}
+% \label{fig:eichenau_anno}
+% \end{figure}
+
+
+\subsection{Training a CNN Using Generated Annotations}
+\label{sec:seg}
+
+In order to validate the utility of the automatically generated annotations, we deployed them as ground-truth data to train a fully convolutional network (FCN) \cite{fcn} for image semantic segmentation, and compared the performance with the segmentation using manual annotations. To be specific, we selected 28 UAV images featuring different regions of the scene and manually labeled them as ground-truth data, which are then split into 23 training samples and 5 testing samples. In parallel, we applied the proposed method to annotate the 23 images as pseudo ground-truth data for training. Both sets of training data are augmented via cropping and rotating, resulting in 8208 images with the size of 300$\times$300 pixels.
+
+% The learning procedure is implemented under the deep learning framework Caffe. We fined tune the FCN-8s model \cite{fcn} \footnote{https://github.com/shelhamer/fcn.berkeleyvision.org} with our dataset. Besides, we plug in the CRF-RNN \cite{crfasrnn_ICCV2015} \footnote{https://github.com/torrvision/crfasrnn} layer in order to achieve sharp edges at class borders.  The corresponding training loss is shown in Figure \ref{fig:loss_ei}. 
+% \begin{figure}[htb]
+%     \centering
+%        \begin{subfigure}[b]{0.4\columnwidth}
+% 	       \centering
+% 			\input{fig/segmentation/auto_loss.tikz}%
+% 			\caption{Inferred Annotation}
+%        \end{subfigure}
+%        \hspace{0.07\columnwidth}
+%        \begin{subfigure}[b]{0.4\columnwidth}  
+% 	       \centering
+% 			\input{fig/segmentation/manual_loss.tikz}%
+% 			\caption{Manual Annotation}
+%        \end{subfigure}
+%        \caption{Loss of training using automatic annotation and manual annotation from iterations 0 to 6000. }
+%        \label{fig:loss_ei}
+% \end{figure}
+
+Figure \ref{fig:seg_ei} shows the predictions on test data using manual and automatic ground-truth data. Where, (a) shows the UAV images for testing, (b) lists the corresponding ground truth, (c) illustrates the predictions deploying automatically generated training data and (d) shows the predictions using manually labeled training data. Table \ref{seg} lists the accuracy of each class which is defined as Intersection over Union (IoU). It can be seen that the automatically generated training data achieved comparable segmentation accuracy as manually labeled training data for static classes such as \textit{Roof}, \textit{Building} and \textit{Ground}, but lower accuracy for class \textit{Car} due to the wrong annotations on moving cars.
+
+
+\begin{figure}[htb]
+\begin{subfigure}{0.243\columnwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/segmentation/DSC00793.JPG}
+\end{subfigure}\vspace{1mm}
+\begin{subfigure}{0.243\columnwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/segmentation/DSC00793.png}
+\end{subfigure}
+\begin{subfigure}{0.243\columnwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/segmentation/DSC00793_6000_manualcrf.png}
+\end{subfigure}
+\begin{subfigure}{0.243\columnwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/segmentation/DSC00793_6000_autocrf.png}
+\end{subfigure}
+
+
+\begin{subfigure}{0.243\columnwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/segmentation/DSC00837.JPG}
+\end{subfigure}\vspace{1mm}
+\begin{subfigure}{0.243\columnwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/segmentation/DSC00837.png}
+\end{subfigure}
+\begin{subfigure}{0.243\columnwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/segmentation/DSC00837_6000_manualcrf.png}
+\end{subfigure}
+\begin{subfigure}{0.243\columnwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/segmentation/DSC00837_6000_autocrf.png}
+\end{subfigure}
+
+\begin{subfigure}{0.243\columnwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/segmentation/DSC00792.JPG}
+\end{subfigure}\vspace{1mm}
+\begin{subfigure}{0.243\columnwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/segmentation/DSC00792.png}
+\end{subfigure}
+\begin{subfigure}{0.243\columnwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/segmentation/DSC00792_6000_manualcrf.png}
+\end{subfigure}
+\begin{subfigure}{0.243\columnwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/segmentation/DSC00792_6000_autocrf.png}
+\end{subfigure}
+
+
+\begin{subfigure}{0.243\columnwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/segmentation/DSC00849.JPG}
+\end{subfigure}\vspace{1mm}
+\begin{subfigure}{0.243\columnwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/segmentation/DSC00849.png}
+\end{subfigure}
+\begin{subfigure}{0.243\columnwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/segmentation/DSC00849_6000_manualcrf.png}
+\end{subfigure}
+\begin{subfigure}{0.243\columnwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/segmentation/DSC00849_6000_autocrf.png}
+\end{subfigure}
+
+
+\begin{subfigure}{0.243\columnwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/segmentation/DSC00855.JPG}
+  \caption{}
+\end{subfigure}
+\begin{subfigure}{0.243\columnwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/segmentation/DSC00855.png}
+  \caption{}
+\end{subfigure}
+\begin{subfigure}{0.243\columnwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/segmentation/DSC00855_6000_manualcrf.png}
+  \caption{}
+\end{subfigure}
+\begin{subfigure}{0.243\columnwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/segmentation/DSC00855_6000_autocrf.png}
+  \caption{}
+\end{subfigure}
+
+\caption{Comparison of predictions on \textbf{Area 1}. (a) original UAV images, (b) corresponding ground-truth, (c) predictions using manually annotated training data, (d) predictions using automatically generated training data.}
+\label{fig:seg_ei}
+\end{figure}
+
+
+
+\begin{table}[htb]
+\centering
+\caption{Comparison of segmentation accuracy (IoU) using automatic training data and manual training data.}
+\label{seg}
+    \begin{tabular}{cccccc}
+    \toprule
+    \textbf{} & \textbf{Roof} & \textbf{Building} & \textbf{Veg} & \textbf{Car} & \textbf{Ground} \\
+    %Define if appropriate
+          
+    \midrule
+
+Manual    &  84.43 &     56.47 & 94.17  & 39.74 & 74.47\\
+Inferred &   87.48 &   61.93   &    93.79  & 36.21& 78.09\\
+% M    &  89.42 &     50.93 & 95.99  & 41.40 & 76.23\\\hline
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Generating Image Annotation on a Scale}
+The superiority of the proposed method lies also in its ability to generate image annotations on a scale. Due to the high expense of time and labor, the quantity of manually labeled ground-truth data is limited and sometimes not enough to achieve reasonable segmentation performance. By contrast, our method can generate image annotations on a large scale exempt from manual work, ensuring sufficient amount of training data. To verify the impact of training data quantity, we applied the network trained with the manual annotations (23 image frames) for image segmentation in \textbf{Area 2}. The predictions, as shown in Figure \ref{fig:area2}-(b), demonstrate deficient accuracy. In contrast, we generated annotations for 72 image frames of \textbf{Area 1} by automatic inference, and then used them to train a CNN. Afterwards, we tested the trained network for image segmentation in \textbf{Area 2}. The prediction results, as depicted in Figure \ref{fig:area2}-(c), demonstrate apparently better semantic accuracy. 
+
+\begin{figure}[htb]
+\begin{subfigure}{0.32\columnwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/segmentation/DSC00958.JPG}
+
+\end{subfigure}
+\begin{subfigure}{0.32\columnwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/segmentation/DSC00958_manual.png}
+
+\end{subfigure}
+\begin{subfigure}{0.32\columnwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/segmentation/DSC00958_auto.png}
+
+\end{subfigure}
+%\vspace{-0.5\baselineskip}
+
+\begin{subfigure}{0.32\columnwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/segmentation/DSC00991.JPG}
+
+\end{subfigure}
+\begin{subfigure}{0.32\columnwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/segmentation/DSC00991_manual.png}
+
+\end{subfigure}
+\begin{subfigure}{0.32\columnwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/segmentation/DSC00991_auto.png}
+\end{subfigure}
+
+%\vspace{-0.5\baselineskip}
+
+\begin{subfigure}{0.32\columnwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/segmentation/DSC01001.JPG}
+
+  \caption{}
+\end{subfigure}
+\begin{subfigure}{0.32\columnwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/segmentation/DSC01001_manual.png}
+ 
+  \caption{}
+\end{subfigure}
+\begin{subfigure}{0.32\columnwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/segmentation/DSC01001_auto.png}
+  
+  \caption{}
+\end{subfigure}
+\caption{Comparison of predictions on \textbf{Area 2}. (a) original UAV images, (b) predictions using 23 manually labeled frames from \textbf{Area 1} as training data, (c) predictions using 72 automatically labeled frames from \textbf{Area 1} as training data.}
+\label{fig:area2}
+\end{figure}
+
+% \subsection{Building classification based on OSM footprint}
+
+% \begin{figure}[htb]
+% \begin{minipage}[b]{0.32\linewidth}
+%   \centering
+%   \centerline{\epsfig{figure=fig/512_rgb.png,width=2.8cm}}
+%   \centerline{(a) }
+% \end{minipage}
+% \begin{minipage}[b]{0.32\linewidth}
+%   \centering
+%   \centerline{\epsfig{figure=fig/512_osm.png,width=2.8cm}}
+%   \centerline{(b) }
+% \end{minipage}
+% \hfill
+% \begin{minipage}[b]{0.32\linewidth}
+%   \centering
+%   \centerline{\epsfig{figure=fig/512_osm.png,width=2.8cm}}
+%   \centerline{(c) }
+% \end{minipage}
+% \hfill
+% \caption{Comparison of oblique aerial imagery and oblique UAV imagery. (a) is the UAV image, (b) and (c) show the corresponding region in the left-view and right-view aerial images}
+% \label{fig:3k_uav}
+% \end{figure}
+
+% \begin{table}[htb]
+%   \centering
+%   \caption{Accuracy comparison of baseline methods and proposed method of Potsdam dataset.}
+%     \begin{tabular}{ccccc}
+%     \toprule
+%     \textbf{Method} & \textbf{Ground} & \textbf{Building} & \textbf{Low Veg} & \textbf{Tree} \\
+%     %Define if appropriate
+          
+%     \midrule
+%     OSM     & - & 92.0 & - & -  \\
+%     FCN  & 87.1  & 91.8  & 75.2  & 86.1\\
+%     Deeplab     & 88.5  & 93.3& 73.9 & 86.9  \\
+%     Bayesian-CRF  & - & 95.7 & - & -  \\
+%     \bottomrule
+%     \end{tabular}%
+%   \label{tab:error_h}%
+% \end{table}%
+\section{automatic image annotation via label propagation from OSM footprints to aerial imagery}
+\label{sec:experiment2}
+In the last section, we have demonstrated the feasibility of automatic image annotating via label propagation, yet manual labeling of source images is still required. In this section, we leverage various remote sensing data for fully automatic annotating. In particular, we propagate OSM footprints to aerial imagery as weak annotations for buildings, and exploit geometric and radiometric information for multi-class image annotation. The experiment is implemented on the widely used Vaihingen dataset.
+
+\subsection{Data Description}
+The Vaihingen dataset was %initially designed for the 2D Semantic Labeling Test Project of ISPRS. 
+provided by the German Association of Photogrammetry and Remote Sensing (DGPF) \cite{Cramer2010TheDO}. The images were captured in the summer of 2008 over Vaihingen, a medium-size village in Germany. The survey site is characterized by various buildings, including small detached houses, traditional buildings with complex shapes and high-rising buildings surrounded by trees. 
+
+Image data used for this experiment includes 33 patches of true orthophoto (TOP) with a GSD of 9cm, each accompanied by a corresponding DSM with the same spatial resolution. The orthophotos were generated by Trimble INPHO OrthoVista as 8 bit TIFF files with three bands, i.e., near infrared, red and green bands. As the relative height above the ground is more interesting for our experiment rather than the absolute elevation, we generated heightmaps for each TOP by filtering and interpolating the ALS point cloud using LASTools\footnote{https://github.com/LAStools/LAStools}. The generated heightmaps have a grid size of 9cm, the same as the TOPs. 
+
+There are 16 available ground-truth annotations of the TOPs, which are manually labeled into six categories, i.e., \textit{Impervious surfaces}, \textit{Building}, \textit{Low vegetation}, \textit{Tree}, \textit{Car} and \textit{Clutter}. In our implementation, we kept classes \textit{Building}, \textit{Low vegetation} and \textit{Tree}, and merged the rest categories (\textit{Impervious surfaces}, \textit{Car} and \textit{Clutter}) into a new category \textit{Ground}. Corresponding color coding is illustrated in Figure \ref{fig:colorbar_vai}. We selected twelve labeled TOPs (areas: 1, 3, 5, 7, 11, 15, 21, 26, 28, 32, 34 and 37) for training and the rest four labeled TOPs (areas: 13, 17, 23 and 30) for testing.
+\begin{figure}[htb]
+    \centering
+\begin{subfigure}{0.8\columnwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/vai/colorbar_vai.JPG}
+\end{subfigure} 
+\caption{Color coding used for Vaihingen dataset}
+       \label{fig:colorbar_vai}
+\end{figure} 
+
+The OSM footprint data used in experiments was downloaded on 21 May, 2018. Despite the large time offset compared with imagery data, the OSM footprints still have sufficient completeness in most areas. According to manual inspection, the position accuracy of OSM footprints ranges from a few decimeters in inner city to several meters in rural areas.
+% The footprints contain only the planar coordinates of building footprints but no height information.  
+
+\subsection{Automatic Image Annotating}
+\subsubsection{Pixel Unary Potentials}
+The pixel unary potential is derived from the OSM footprints data only. More formally, let $I$ denote the set of pixels in TOP and $\mathcal{L}$ denote the set of $K$ pre-defined labels. In our case, $K=4$, $\mathcal{L}= \big\{\textit{Building}, \textit{Low vegetation}, \textit{Tree}, \textit{Ground}\big\}$. Projecting OSM building footprints into a TOP image, the corresponding projection area is denoted by $I_b\left(I_b \subseteq I\right)$ and a degree of belief for the OSM footprints is denoted by $p$. Let $l_b$ denote the label index of class \textit{Building}, $P\left(x_i\right)$ encodes the prior belief of a pixel $i$ ($i\in I$) taking the label $x_i \left(x_i \in \mathcal{L}\right)$, which is defined as:
+
+\begin{equation}
+\label{eq:8}
+\begin{aligned}
+\forall i\in I_b, P\left(x_i\right)=\left\{
+\begin{array}{lcl}
+p & & {x_i = l_b}\\
+\frac{\left(1-p\right)}{K-1} & & {x_i \neq l_b}
+\end{array} \right.
+\\
+\forall i \notin I_b, P\left(x_i\right)=\left\{
+\begin{array}{lcl}
+1-p & & {x_i = l_b}\\
+\frac{p}{K-1} & & {x_i \neq l_b}
+\end{array} \right.
+\end{aligned}
+\end{equation}
+
+Afterwards, the prior label assignment probability is updated via Bayesian inference given additional evidence. In this experiment, we exploited the height and NDVI values as additional evidence, denoted by $H$ and $N$ respectively (the evidence set $\mathbf{O}$ in Equation \ref{eq:3} is namely \big\{H, N\big\}). Particularly, the height value is extracted from the heightmap and the NDVI is calculated based on image radiometric information using following formula: 
+\begin{equation}
+\label{eq:9}
+\begin{array}{lcl}
+NDVI = \frac {(NIR-Red)}{(NIR+Red)}\\
+\end{array}
+\end{equation}
+where NIR and Red are the gray values of the TOP tiff files.
+
+Let $P\left(H\mid \mathbf{x}\right)$ and $P\left(N\mid \mathbf{x}\right)$ denote the likelihoods of height and NDVI value for given class $\mathbf{x}$, which are empirically defined based on image statistics. In our settings, we model the likelihood function as a normal distribution. In complicated cases, e.g., the pre-defined class \textit{Tree} includes bushes and tall trees which have different distribution on height, we then model the likelihood function as a weighted sum of normal distributions, i.e., $f(H;\mu ,\sigma ^{2}) = \sum \omega_i\frac {1}{\sqrt {2\pi \sigma_i ^{2}}}e^{-\frac {(H-\mu_i )^{2}}{2\sigma_i ^{2}}}$. A visualization of the likelihood functions is illustrated in Figure \ref{fig:vai_distrib}, and the parameter settings are listed in Table \ref{tab:vai_para_h} and \ref{tab:vai_para_ndvi}. In particular, the lower bounds for the height of \textit{Tree} and \textit{Building} were set as 0.5m and 2m respectively. For the sake of simplification, we assume \textit{Tree} and \textit{Low Veg}, \textit{Ground} and \textit{Building} have the same likelihood functions for NDVI. Considering the fact that the vegetation NDVI has relatively lower value in shaded areas, the likelihood function for vegetation NDVI is composed of two normal distributions representing the NDVI in normal cases and in shaded areas. Provided observations on height and NDVI, the posterior distribution $P\left(\mathbf{x} \mid H, N\right)$, can be calculated based on Equations \ref{eq:2} and \ref{eq:3}.
+
+\begin{figure}[htb]
+    \centering
+       \begin{subfigure}{0.48\columnwidth}
+	       \centering
+           \includegraphics[width=\linewidth]{fig/vai/vai_height}	
+       \end{subfigure}
+       ~
+       \begin{subfigure}{0.48\columnwidth}
+	       \centering
+			\includegraphics[width=\linewidth]{fig/vai/vai_ndvi}	
+       \end{subfigure}       
+       \caption{Probability distributions of height and NDVI for Vaihingen dataset.}
+       \label{fig:vai_distrib}
+\end{figure}
+
+
+\begin{table}[htbp]
+  \centering
+  \caption{Parameter settings of probability distribution functions for height, Vaihingen Dataset.}
+    \begin{tabular}{c|c|c|c|c|c}
+    \hline
+    \textbf{Parameter} & \textbf{Ground} & \textbf{Building} & \textbf{Low Veg} & \multicolumn{2}{c}{\textbf{Tree}} \\
+    %Define if appropriate
+          
+    \hline
+    $\omega$     & 2     & 1     & 2     & 0.4   & 0.5 \\
+    
+    $\mu$     & 0     & 7.5   & 0     & 2.5   & 5 \\
+    
+    $\sigma$ & 0.5   & 3.5   & 1     & 1.5   & 4 \\
+    \hline
+    \end{tabular}%
+  \label{tab:vai_para_h}%
+\end{table}%
+
+\begin{table}[htbp]
+  \centering
+  \caption{Parameter settings of probability distribution functions for NDVI, Vaihingen Dataset.}
+    \begin{tabular}{c|c|c|c}
+    \hline
+    \textbf{Parameter} & \textbf{Ground}, \textbf{Building} & \multicolumn{2}{c}{\textbf{Low Veg}, \textbf{Tree}} \\
+    %Define if appropriate
+          
+    \hline
+    $\omega$     & 1       & 0.9   & 0.1 \\
+    
+    $\mu$     & -0.1        & 0.5   & 0.1 \\
+    
+    $\sigma$ & 0.2      & 0.1   & 0.05 \\
+    \hline
+    \end{tabular}%
+  \label{tab:vai_para_ndvi}%
+\end{table}%
+
+Intuitively, the height evidence helps to distinguish high objects like buildings and trees from low objects like low vegetation and the ground, while the NDVI evidence can effectively differentiate low vegetation and trees from non-vegetation.
+
+\subsubsection{Inference}
+A few examples of the inferred annotations are depicted in Figure \ref{fig:vai_infer}. The source data required for inference is listed in columns (a) - (c): (a) true orthophotos with three bands: near infrared, red and green, (b) corresponding heightmaps, (c) building masks projected from OSM footprints. After inference using our Bayesian-CRF graphical model, the generated image annotations are depicted in column (d), and the manually labeled ground-truth data is listed in column (e). It can be seen that the automatically generated annotations have high similarity with manual annotations in general. However, in dark or shaded areas, there are a few errors in categories \textit{Low Vegetation} and \textit{Tree}. This is because the NDVI value cannot well distinguish the vegetation from the ground in shaded areas. 
+
+
+\begin{figure*}[htb]
+\begin{subfigure}{0.19\textwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/vai/1_irg.JPG}
+  
+\end{subfigure}\vspace{1mm}
+\begin{subfigure}{0.19\textwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/vai/1_hm.jpg}
+\end{subfigure}
+\begin{subfigure}{0.19\textwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/vai/1_osm.jpg}
+\end{subfigure}
+\begin{subfigure}{0.19\textwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/vai/1_anno.png}
+\end{subfigure}
+\begin{subfigure}{0.19\textwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/vai/1_gt.png}
+\end{subfigure}
+
+% \begin{subfigure}{0.19\textwidth}
+%   \centering
+%   \includegraphics[width=1\linewidth]{fig/vai/3_irg.JPG}
+% \end{subfigure}\vspace{1mm}
+% \begin{subfigure}{0.19\textwidth}
+%   \centering
+%   \includegraphics[width=1\linewidth]{fig/vai/3_hm.jpg}
+% \end{subfigure}
+% \begin{subfigure}{0.19\textwidth}
+%   \centering
+%   \includegraphics[width=1\linewidth]{fig/vai/3_osm.jpg}
+% \end{subfigure}
+% \begin{subfigure}{0.19\textwidth}
+%   \centering
+%   \includegraphics[width=1\linewidth]{fig/vai/3_anno.png}
+% \end{subfigure}
+% \begin{subfigure}{0.19\textwidth}
+%   \centering
+%   \includegraphics[width=1\linewidth]{fig/vai/3_gt.png}
+% \end{subfigure}
+
+\begin{subfigure}{0.19\textwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/vai/5_irg.JPG}
+\end{subfigure}\vspace{1mm}
+\begin{subfigure}{0.19\textwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/vai/5_hm.jpg}
+\end{subfigure}
+\begin{subfigure}{0.19\textwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/vai/5_osm.jpg}
+\end{subfigure}
+\begin{subfigure}{0.19\textwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/vai/5_anno.png}
+\end{subfigure}
+\begin{subfigure}{0.19\textwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/vai/5_gt.png}
+\end{subfigure}
+
+% \begin{subfigure}{0.19\textwidth}
+%   \centering
+%   \includegraphics[width=1\linewidth]{fig/vai/7_irg.JPG}
+% \end{subfigure}\vspace{1mm}
+% \begin{subfigure}{0.19\textwidth}
+%   \centering
+%   \includegraphics[width=1\linewidth]{fig/vai/7_hm.jpg}
+% \end{subfigure}
+% \begin{subfigure}{0.19\textwidth}
+%   \centering
+%   \includegraphics[width=1\linewidth]{fig/vai/7_gt.png}
+% \end{subfigure}
+% \begin{subfigure}{0.19\textwidth}
+%   \centering
+%   \includegraphics[width=1\linewidth]{fig/vai/7_osm.jpg}
+% \end{subfigure}
+% \begin{subfigure}{0.19\textwidth}
+%   \centering
+%   \includegraphics[width=1\linewidth]{fig/vai/7_anno.png}
+% \end{subfigure}
+
+\begin{subfigure}{0.19\textwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/vai/26_irg.JPG}
+\end{subfigure}\vspace{1mm}
+\begin{subfigure}{0.19\textwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/vai/26_hm.jpg}
+\end{subfigure}
+\begin{subfigure}{0.19\textwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/vai/26_osm.jpg}
+\end{subfigure}
+\begin{subfigure}{0.19\textwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/vai/26_anno.png}
+\end{subfigure}
+\begin{subfigure}{0.19\textwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/vai/26_gt.png}
+\end{subfigure}
+
+\begin{subfigure}{0.19\textwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/vai/32_irg.JPG}
+\end{subfigure}\vspace{1mm}
+\begin{subfigure}{0.19\textwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/vai/32_hm.jpg}
+\end{subfigure}
+\begin{subfigure}{0.19\textwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/vai/32_osm.jpg}
+\end{subfigure}
+\begin{subfigure}{0.19\textwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/vai/32_anno.png}
+\end{subfigure}
+\begin{subfigure}{0.19\textwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/vai/32_gt.png}
+\end{subfigure}
+
+\begin{subfigure}{0.19\textwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/vai/37_irg.JPG}
+  \caption{}
+\end{subfigure}\vspace{1mm}
+\begin{subfigure}{0.19\textwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/vai/37_hm.jpg}
+  \caption{}
+\end{subfigure}
+\begin{subfigure}{0.19\textwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/vai/37_osm.jpg}
+  \caption{}
+\end{subfigure}
+\begin{subfigure}{0.19\textwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/vai/37_anno.png}
+  \caption{}
+\end{subfigure}
+\begin{subfigure}{0.19\textwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/vai/37_gt.png}
+  \caption{}
+\end{subfigure}
+\caption{Comparison of manual annotations and inferred annotations. (a) true orthophoto, (b) corresponding heightmap, (c) building mask projected from OSM building footprint, (d) automatically inferred image annotations, (e) manually labeled ground-truth.}
+%\caption{Predictions of No.30 tile in Vaihingen dataset, where (a) is the original true orthophoto, (b) is the ground truth, (c) is the building mask created from OSM building footprint and (d) depicts the inferred annotation}
+\label{fig:vai_infer}
+\end{figure*}
+
+\subsection{Analysis of Inferred Annotations}
+Manual image annotating interprets the scene merely based on image information, thus the accuracy is usually lower at areas with low brightness and contrast. In comparison, our method jointly utilizes the complimentary radiometric and geometric information, which contributes to higher semantic accuracy in such situations. Additionally, the inferred annotations inherently conform to image gradients and therefore have higher shape accuracy for irregular objects.
+
+\subsubsection{Comparison With Manual Annotations}
+Manual image annotating often suffers from the existence of shadow, in such cases, our method can achieve higher semantic accuracy as it also takes height information into consideration. A few examples are illustrated in Figure \ref{fig:vai_comp_manual}. From left to right in each row, (a)-(e) are snapshots from Google Maps, true orthophotos, manually labeled ground-truth data, corresponding heightmaps and automatically inferred annotations, respectively. Building areas to be noted are highlighted in red. More specifically, figures in the first row show a building which is visible in Google Maps but partly hidden in shadows in the true orthophoto, therefore it was wrongly labeled as ground in manual annotation. However, with the help of the height evidence, our method labeled the building correctly. A similar example is shown in the second row, where the ground was wrongly labeled as building in manual annotation but correctly labeled by our method. The third row presents an example for shape accuracy of buildings, demonstrating that the inferred annotation is more accurate at building boundaries than manual annotation.
+
+
+\begin{figure}[H]
+\begin{subfigure}{0.19\columnwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/comp_manual/building1_google.jpg}
+\end{subfigure}
+\begin{subfigure}{0.19\columnwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/comp_manual/building_1_rgb2.png}  
+\end{subfigure}\vspace{1mm}
+\begin{subfigure}{0.19\columnwidth}
+  \centering
+\begin{tikzpicture}
+    \node[inner sep=0pt] (ima) at (0,0) {\includegraphics[width=1\columnwidth]{fig/comp_manual/building_1_gt2.png}};
+     %\begin{scope}[x={(ima.south east)},y={(ima.north west)}]
+         \draw[red, dashed, ultra thick,rounded corners] (-0.9,0.7) rectangle (-0.2,-0.3);
+     %\end{scope}    
+ \end{tikzpicture}
+\end{subfigure}
+\begin{subfigure}{0.19\columnwidth}
+  \centering
+  \begin{tikzpicture}
+    \node[inner sep=0pt] (ima) at (0,0) {\includegraphics[width=1\columnwidth]{fig/comp_manual/building_1_hm2_ori.png}};
+     %\begin{scope}[x={(ima.south east)},y={(ima.north west)}]
+         %\draw[red, ultra thick,rounded corners] (-0.7,0.7) rectangle (0.2,-0.5);
+     %\end{scope}    
+ \end{tikzpicture}
+\end{subfigure}
+\begin{subfigure}{0.19\columnwidth}
+  \centering
+\begin{tikzpicture}
+    \node[inner sep=0pt] (ima) at (0,0) {\includegraphics[width=1\columnwidth]{fig/comp_manual/building_1_anno2.png}};
+     %\begin{scope}[x={(ima.south east)},y={(ima.north west)}]
+         \draw[red, ultra thick,rounded corners] (-0.9,0.7) rectangle (-0.2,-0.3);
+     %\end{scope}    
+ \end{tikzpicture}
+\end{subfigure}
+
+
+\begin{subfigure}{0.19\columnwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/comp_manual/building28_google.jpg}
+\end{subfigure}
+\begin{subfigure}{0.19\columnwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/comp_manual/building_28_rgb.png}  
+\end{subfigure}\vspace{1mm}
+\begin{subfigure}{0.19\columnwidth}
+  \centering
+\begin{tikzpicture}
+    \node[inner sep=0pt] (ima) at (0,0) {\includegraphics[width=1\columnwidth]{fig/comp_manual/building_28_gt.png}};
+     %\begin{scope}[x={(ima.south east)},y={(ima.north west)}]
+         \draw[red, dashed, ultra thick,rounded corners] (-0.8,0.7) rectangle (0.3,-0.8);
+     %\end{scope}    
+ \end{tikzpicture}
+\end{subfigure}
+\begin{subfigure}{0.19\columnwidth}
+  \centering
+  \begin{tikzpicture}
+    \node[inner sep=0pt] (ima) at (0,0) {\includegraphics[width=1\columnwidth]{fig/comp_manual/building_28_hm_ori.png}};
+     %\begin{scope}[x={(ima.south east)},y={(ima.north west)}]
+         %\draw[red, ultra thick,rounded corners] (-0.8,0.7) rectangle (0.3,-0.8);
+     %\end{scope}    
+ \end{tikzpicture}
+\end{subfigure}
+\begin{subfigure}{0.19\columnwidth}
+  \centering
+\begin{tikzpicture}
+    \node[inner sep=0pt] (ima) at (0,0) {\includegraphics[width=1\columnwidth]{fig/comp_manual/building_28_anno.png}};
+     %\begin{scope}[x={(ima.south east)},y={(ima.north west)}]
+         \draw[red, ultra thick,rounded corners] (-0.8,0.7) rectangle (0.3,-0.8);
+     %\end{scope}    
+ \end{tikzpicture}
+\end{subfigure}
+
+\begin{subfigure}{0.19\columnwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/comp_manual/building_1_google.jpg}
+  \caption{}
+\end{subfigure}
+\begin{subfigure}{0.19\columnwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/comp_manual/building_1_rgb.png}  
+ \caption{} 
+\end{subfigure}\vspace{1mm}
+\begin{subfigure}{0.19\columnwidth}
+  \centering
+\begin{tikzpicture}
+    \node[inner sep=0pt] (ima) at (0,0) {\includegraphics[width=1\columnwidth]{fig/comp_manual/building_1_gt.png}};
+     %\begin{scope}[x={(ima.south east)},y={(ima.north west)}]
+         \draw[red, dashed, ultra thick,rounded corners] (-0.2,0.1) rectangle (0.8,-0.8);
+     %\end{scope}    
+ \end{tikzpicture}
+ \caption{}
+\end{subfigure}
+\begin{subfigure}{0.19\columnwidth}
+  \centering
+  \begin{tikzpicture}
+    \node[inner sep=0pt] (ima) at (0,0) {\includegraphics[width=1\columnwidth]{fig/comp_manual/building_1_hm.png}};
+     %\begin{scope}[x={(ima.south east)},y={(ima.north west)}]
+         %\draw[red, ultra thick,rounded corners] (-0.2,0.1) rectangle (0.8,-0.8);
+     %\end{scope}    
+ \end{tikzpicture}
+ \caption{}
+\end{subfigure}
+\begin{subfigure}{0.19\columnwidth}
+  \centering
+\begin{tikzpicture}
+    \node[inner sep=0pt] (ima) at (0,0) {\includegraphics[width=1\columnwidth]{fig/comp_manual/building_1_anno.png}};
+     %\begin{scope}[x={(ima.south east)},y={(ima.north west)}]
+         \draw[red, ultra thick,rounded corners] (-0.2,0.1) rectangle (0.8,-0.8);
+     %\end{scope}    
+ \end{tikzpicture}
+ \caption{}
+\end{subfigure}
+
+
+
+
+
+
+% \begin{subfigure}{0.24\columnwidth}
+%   \centering
+%   \includegraphics[width=1\linewidth]{fig/comp_manual/building_5_rgb.png}  
+%   \caption{}
+% \end{subfigure}\vspace{1mm}
+% \begin{subfigure}{0.24\columnwidth}
+%   \centering
+%   \includegraphics[width=1\linewidth]{fig/comp_manual/building_5_hm.png}
+%   \caption{}
+% \end{subfigure}
+% \begin{subfigure}{0.24\columnwidth}
+%   \centering
+%   \includegraphics[width=1\linewidth]{fig/comp_manual/building_5_gt.png}
+%   \caption{}
+% \end{subfigure}
+% \begin{subfigure}{0.24\columnwidth}
+%   \centering
+%   \includegraphics[width=1\linewidth]{fig/comp_manual/building_5_anno.png}
+%   \caption{}
+% \end{subfigure}
+\caption{Comparison of building accuracy between automatically inferred and manually labeled annotations. (a) snapshot from Google Maps, (b) true orthophotos, (c) manually labeled ground-truth data, (d) corresponding heightmaps, (e) automatically inferred annotations. Building areas to be noted are highlighted in red. Dashed lines indicate wrong labeling and solid lines indicate correct labeling.}
+\label{fig:vai_comp_manual}
+\end{figure}
+
+The semantic accuracy of class \textit{Ground} is compared in Figure \ref{fig:vai_comp_manual_ground}. From left to right in each row, (a)-(c) are true orthophotos, manually labeled ground-truth data and automatically inferred annotations respectively. In the two scenes, although the bare ground nearby buildings or through the grassland can be easily recognized on orthophotos, precise annotating is still unpractical due to its irregular shape. Therefore many ground areas are roughly labeled or ignored, as highlighted by the red dashed boxes. By contrast, they are correctly labeled in the automatic annotations, as highlighted by the red solid boxes.  
+\begin{figure}[H]
+\begin{subfigure}{0.315\columnwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/comp_manual/15_rgb1_crop.jpg}  
+  %\caption{}
+\end{subfigure}\vspace{1mm}
+~
+\begin{subfigure}{0.315\columnwidth}
+  \centering
+   \begin{tikzpicture}
+    \node[inner sep=0pt] (ima) at (0,0) {\includegraphics[width=1\columnwidth]{fig/comp_manual/15_gt1_crop.jpg}};
+     \draw[red, dashed, ultra thick,rounded corners] (-1.3,1.35) rectangle (-0.3,0.9);
+     \draw[red, dashed, ultra thick,rounded corners] (0.1,1.35) rectangle (1.2,-0.5);
+ \end{tikzpicture}
+\end{subfigure}
+~
+\begin{subfigure}{0.315\columnwidth}
+  \centering
+  \begin{tikzpicture}
+    \node[inner sep=0pt] (ima) at (0,0) {\includegraphics[width=1\columnwidth]{fig/comp_manual/15_anno1_crop.jpg}};
+     \draw[red, ultra thick,rounded corners] (-1.3,1.35) rectangle (-0.3,0.9);
+     \draw[red, ultra thick,rounded corners] (0.1,1.35) rectangle (1.2,-0.5);
+ \end{tikzpicture}
+  %\caption{}
+\end{subfigure}
+
+\begin{subfigure}{0.315\columnwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/comp_manual/15_rgb2_crop.jpg}  
+  \caption{}
+\end{subfigure}\vspace{1mm}
+~
+\begin{subfigure}{0.315\columnwidth}
+  \centering
+  \begin{tikzpicture}
+    \node[inner sep=0pt] (ima) at (0,0) {\includegraphics[width=1\columnwidth]{fig/comp_manual/15_gt2_crop.jpg}};
+         \draw[red, dashed, ultra thick,rounded corners] (-1.3,0.7) rectangle (0.3,-0.8);
+ \end{tikzpicture}
+  \caption{}
+\end{subfigure}
+~
+\begin{subfigure}{0.315\columnwidth}
+  \centering
+  \begin{tikzpicture}
+    \node[inner sep=0pt] (ima) at (0,0) {\includegraphics[width=1\columnwidth]{fig/comp_manual/15_anno2_crop.jpg}};
+         \draw[red, ultra thick,rounded corners] (-1.3,0.7) rectangle (0.3,-0.8);
+ \end{tikzpicture}
+  \caption{}
+\end{subfigure}
+\caption{Comparison of ground accuracy between automatically inferred and manually labeled annotations. (a) true orthophotos, (b) manually labeled ground-truth data, (c) automatically inferred annotations. Ground areas to be compared are highlighted in red. Dashed lines indicate wrong labeling and solid lines indicate correct labeling.}
+\label{fig:vai_comp_manual_ground}
+\end{figure}
+
+
+
+On the other hand, the performance of our method is influenced by the accuracy of heightmaps. Inaccurate height information may lead to wrong labeling, especially when the image content is not distinguishable. For instance, grassland and bushes are labeled respectively as \textit{Low Vegetation} and \textit{Tree} in ground-truth annotations, however, the heightmap extracted from the DSM can not well preserve the small height difference between them and the NDVI evidence is not distinguishable either. This accounts for the wrong annotations for classes \textit{Low Vegetation} and \textit{Tree}, as shown in Figure \ref{fig:vai_comp_manual} and \ref{fig:vai_comp_manual_ground}. 
+
+
+\subsubsection{Comparison with OSM building footprints}
+Building annotations are originally derived from the up-to-date OSM data, which has about ten years time offset with the image data. The considerable temporal changes of building result in low semantic accuracy of the source labeling. Nevertheless, our method is able to generate building annotations with substantially improved accuracy based on additional evidence. Figure \ref{fig:vai_comp_osm} presents a comparison between OSM building footprints (left column) and inferred building annotations (right column), which are both overlaid on TOP. The highlighted areas in (a), (c) indicate the errors in OSM footprints caused by temporal changes of buildings, which, in contrast, are correctly labeled in the inferred annotations. Besides, OSM footprints usually have low position accuracy, especially in rural areas. As compared in (e), (f), the OSM building footprints have large shift in position while the inferred annotations have apparently higher position accuracy. Third, OSM footprints usually have simplified shapes as illustrated in (g), but the inferred annotations achieve high shape accuracy for buildings with complex structures.
+% Even for the buildings which are partly covered or occluded by vegetations, the inference can still result in accurate class boundaries.  
+
+
+\begin{figure}[H]
+ \begin{subfigure}{0.485\columnwidth}
+   \centering
+\begin{tikzpicture}
+    \node[inner sep=0pt] (ima) at (0,0) {\includegraphics[width=1\columnwidth]{fig/comp_osm/37_osm_lay.png}};
+     %\begin{scope}[x={(ima.south east)},y={(ima.north west)}]
+         \draw[yellow, dashed, very thick,rounded corners] (-0.5,0.1) rectangle (2,0.9);
+         %\draw[yellow, dashed, very thick,rounded corners] (0.6,0.1) rectangle (2,1);
+         \draw[yellow, dashed, very thick,rounded corners] (1.7,-1.6) rectangle (2.15,-2);
+     %\end{scope}    
+ \end{tikzpicture}
+   \caption{}  
+ \end{subfigure}
+~
+ \begin{subfigure}{0.485\columnwidth}
+   \centering
+ \begin{tikzpicture}
+    \node[inner sep=0pt] (imb) at (0.5\columnwidth,0) {\includegraphics[width=1\columnwidth]{fig/comp_osm/37_anno_lay.png}};
+     \begin{scope}[xshift=0.5\columnwidth]
+         \draw[yellow, very thick,rounded corners] (-0.5,0.1) rectangle (2,0.9);
+         %\draw[yellow, very thick,rounded corners] (0.6,0.1) rectangle (2,1);
+         \draw[yellow, very thick,rounded corners] (1.7,-1.6) rectangle (2.15,-2);
+     \end{scope}    
+\end{tikzpicture}
+   \caption{}  
+ \end{subfigure}
+ ~
+ \begin{subfigure}{0.485\columnwidth}
+   \centering
+\begin{tikzpicture}
+    \node[inner sep=0pt] (ima) at (0,0) {\includegraphics[width=1\columnwidth]{fig/comp_osm/building_34_osm.png}};
+     %\begin{scope}[x={(ima.south east)},y={(ima.north west)}]
+         %\draw[yellow, dashed, very thick,rounded corners] (-1.5,2.8) rectangle (-0.8,2.1);
+          \draw[yellow, dashed, very thick,rounded corners] (-1.1,-0.1) rectangle (2.1,2);
+         %\draw[yellow, dashed, very thick,rounded corners] (0.3,-2.3) rectangle (1,-2.9);         
+     %\end{scope}    
+ \end{tikzpicture}
+   \caption{}  
+ \end{subfigure}
+~
+ \begin{subfigure}{0.485\columnwidth}
+   \centering
+ \begin{tikzpicture}
+    \node[inner sep=0pt] (imb) at (0.5\columnwidth,0) {\includegraphics[width=1\columnwidth]{fig/comp_osm/building_34_anno.png}};
+     \begin{scope}[xshift=0.5\columnwidth]
+         %\draw[yellow, very thick,rounded corners] (-1.5,2.8) rectangle (-0.8,2.1);
+         \draw[yellow, very thick,rounded corners] (-1.1,-0.1) rectangle (2.1,2);
+         %\draw[yellow, very thick,rounded corners] (0.3,-2.3) rectangle (1,-2.9); 
+     \end{scope}    
+\end{tikzpicture}
+   \caption{}  
+ \end{subfigure}
+ ~
+ \begin{subfigure}{0.485\columnwidth}
+   \centering
+\begin{tikzpicture}
+    \node[inner sep=0pt] (ima) at (0,0) {\includegraphics[width=1\columnwidth]{fig/comp_osm/37_osm_laycrop.png}};         
+     %\end{scope}    
+ \end{tikzpicture}
+   \caption{} 
+ \end{subfigure}
+~
+ \begin{subfigure}{0.485\columnwidth}
+   \centering
+ \begin{tikzpicture}
+    \node[inner sep=0pt] (imb) at (0.5\columnwidth,0) {\includegraphics[width=1\columnwidth]{fig/comp_osm/37_anno_laycrop.png}};   
+\end{tikzpicture}
+   \caption{}  
+ \end{subfigure} 
+  ~
+ \begin{subfigure}{0.486\columnwidth}
+   \centering
+\begin{tikzpicture}
+    \node[inner sep=0pt] (ima) at (0,0) {\includegraphics[width=1\columnwidth]{fig/comp_osm/34_osm_laycrop.png}};         
+     %\end{scope}    
+ \end{tikzpicture}
+   \caption{} 
+ \end{subfigure}
+~
+ \begin{subfigure}{0.486\columnwidth}
+   \centering
+ \begin{tikzpicture}
+    \node[inner sep=0pt] (imb) at (0.5\columnwidth,0) {\includegraphics[width=1\columnwidth]{fig/comp_osm/34_anno_laycrop.png}};   
+\end{tikzpicture}
+   \caption{}  
+ \end{subfigure} 
+\caption{Comparison between OSM building footprints (left column) and inferred building annotations (right column), both overlaid on TOP. Yellow rectangles in (a), (c) highlight the wrong labels in OSM footprints which are correct in (b), (d). Position accuracy is compared in (e), (f). Shape accuracy is compared in (g), (h).}
+\label{fig:vai_comp_osm}
+\end{figure}
+
+
+\subsection{Training a CNN Using Generated Annotations}
+In order to validate the utilization of the automatically generated annotations, we leveraged them as training data for image semantic segmentation using a deep convolutional neural network and compared the performance with the segmentation using manually labeled training data. Following the training and testing procedures for FCN \cite{fcn}, we selected twelve labeled TOPs (areas: 1, 3, 5, 7, 11, 15, 21, 26, 28, 32, 34 and 37) for training and kept the rest four labeled TOPs (areas: 13, 17, 23 and 30) for testing. In parallel, we trained another network using the inferred annotations of the 12 tiles, and then compared their performance in testing.  
+
+The IoU accuracy of each class is listed in Table \ref{tab:vai_seg}. In general, segmentation using inferred annotations achieves comparable overall accuracy as segmentation using manual annotations. Specifically, segmentation using inferred annotations achieves higher accuracy for almost all categories except the \textit{Tree} category. Figure \ref{fig:vai_seg} depicts full tile predictions using manual and automatic training data, where each row from top to bottom corresponds to tiles No.30, No.13, No.17 and No.23. From left to right, (a) shows the original true orthophotos, (b) shows corresponding ground-truth, (c) illustrates pixel-wise predictions using manually labeled annotations as training data, (d) depicts pixel-wise predictions using automatically inferred annotations as training data. In order to visualize the distribution of wrong predictions, we also present the corresponding error map in Figure \ref{fig:vai_seg_error}. From left to right, (a) shows the original true orthophotos, (b) shows the prediction errors using manual annotations as training data and (c) shows the wrong predictions using automatic annotations as training data. Wrong predictions are highlighted in (b) and (c) and the colors indicate the "true" labels according to the ground truth. For class \textit{Building}, errors are generally caused by shadows and presented as over-segmentations in building areas. For class \textit{Ground} and class \textit{Low Veg}, errors are mainly distributed in shaded areas where the NDVI information cannot well distinguish vegetation and non-vegetation. Errors in class \textit{Tree} generally come from bushes, which have similar height and NDVI with \textit{Low Veg}. In these cases, neither height nor NDVI information is able to well distinguish them. In consequence, many regions of class \textit{Tree} are incorrectly inferred as \textit{Low Veg} or \textit{Ground}. 
+
+Both qualitative and quantitative analysis have demonstrated the effectiveness of leveraging the inferred annotations as ground-truth data for training. In general, image segmentation using inferred training data is able to achieve comparable accuracy as segmentation using manual annotations. 
+
+
+\begin{table}[h]
+  \centering
+  \caption{Segmentation accuracy (IoU) comparison between inferred annotations and manual annotations.}
+    \begin{tabular}{cccccc}
+    \toprule
+    \textbf{Method} & \textbf{Ground} & \textbf{Building} & \textbf{Low Veg} & \textbf{Tree} & \textbf{Mean} \\
+    %Define if appropriate
+          
+    \midrule
+    OSM     & - & 73.70 & - & - & \\
+    Manual  & 68.11  & 84.32  & 62.08  & 66.74 & 70.31\\
+    %Deeplab     & 88.5  & 93.3& 73.9 & 86.9  \\
+    Inferred  & 70.54 & 86.78 & 63.80 & 59.21 &  70.08\\
+    \bottomrule
+    \end{tabular}%
+  \label{tab:vai_seg}%
+\end{table}%
+
+
+\begin{figure}[H]
+\begin{subfigure}{0.325\columnwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/vai/30.png} 
+  %\caption{}
+\end{subfigure}\vspace{1mm}
+\begin{subfigure}{0.325\columnwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/vai/30_diff_manual.png}
+  %\caption{}
+\end{subfigure}
+\begin{subfigure}{0.325\columnwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/vai/30_diff_auto.png}
+  %\caption{}
+\end{subfigure}
+\begin{subfigure}{0.325\columnwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/vai/13.JPG} 
+  %\caption{}
+\end{subfigure}\vspace{1mm}
+\begin{subfigure}{0.325\columnwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/vai/13_diff_manual.png}
+  %\caption{}
+\end{subfigure}
+\begin{subfigure}{0.325\columnwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/vai/13_diff_auto.png}
+  %\caption{}
+\end{subfigure}
+\begin{subfigure}{0.325\columnwidth}
+  \centering
+  \includegraphics[angle=90,width=1\linewidth]{fig/vai/17.JPG} 
+  %\caption{}
+\end{subfigure}\vspace{1mm}
+\begin{subfigure}{0.325\columnwidth}
+  \centering
+  \includegraphics[angle=90,width=1\linewidth]{fig/vai/17_diff_manual.png}
+  %\caption{}
+\end{subfigure}
+\begin{subfigure}{0.325\columnwidth}
+  \centering
+  \includegraphics[angle=90,width=1\linewidth]{fig/vai/17_diff_auto.png}
+  %\caption{}
+\end{subfigure}
+\begin{subfigure}{0.325\columnwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/vai/23.JPG} 
+  \caption{}
+\end{subfigure}\vspace{1mm}
+\begin{subfigure}{0.325\columnwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/vai/23_diff_manual.png}
+  \caption{}
+\end{subfigure}
+\begin{subfigure}{0.325\columnwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{fig/vai/23_diff_auto.png}
+  \caption{}
+\end{subfigure}
+\caption{Comparison of prediction errors using manual and automatic training data for Vaihingen dataset. Each row shows from top to buttom: tiles No.30, No.13, No.17, No.23. From left to right, (a) original true orthophotos, (b) prediction errors using manual annotations as training data, (c) prediction errors using automatically generated annotations as training data. Wrong predictions are highlighted using the colors from the ground truth.}
+\label{fig:vai_seg_error}
+\end{figure}
+\begin{figure*}[htb]
+ \begin{subfigure}{0.24\textwidth}
+   \centering
+   \includegraphics[width=1\linewidth]{fig/vai/30.png} 
+ \end{subfigure}\vspace{1mm}
+ \begin{subfigure}{0.24\textwidth}
+   \centering
+   \includegraphics[width=1\linewidth]{fig/vai/30_gt.png}
+ \end{subfigure}
+ \begin{subfigure}{0.24\textwidth}
+   \centering
+   \includegraphics[width=1\linewidth]{fig/vai/30_manual.png}
+ \end{subfigure}
+ \begin{subfigure}{0.24\textwidth}
+   \centering
+   \includegraphics[width=1\linewidth]{fig/vai/30_auto.png}
+ \end{subfigure}
+ 
+ \begin{subfigure}{0.24\textwidth}
+   \centering
+   \includegraphics[width=1\linewidth]{fig/vai/13.JPG} 
+ \end{subfigure}\vspace{1mm}
+ \begin{subfigure}{0.24\textwidth}
+   \centering
+  \includegraphics[width=1\linewidth]{fig/vai/13_gt.png}
+ \end{subfigure}
+ \begin{subfigure}{0.24\textwidth}
+   \centering
+   \includegraphics[width=1\linewidth]{fig/vai/13_manual.png}
+ \end{subfigure}
+ \begin{subfigure}{0.24\textwidth}
+   \centering
+   \includegraphics[width=1\linewidth]{fig/vai/13_auto.png}
+ \end{subfigure}
+ 
+ \begin{subfigure}{0.24\textwidth}
+   \centering
+   \includegraphics[width=1\linewidth]{fig/vai/17.JPG}
+ \end{subfigure}\vspace{1mm}
+ \begin{subfigure}{0.24\textwidth}
+   \centering
+   \includegraphics[width=1\linewidth]{fig/vai/17_gt.png}
+ \end{subfigure}
+ \begin{subfigure}{0.24\textwidth}
+   \centering
+   \includegraphics[width=1\linewidth]{fig/vai/17_manual.png}
+ \end{subfigure}
+ \begin{subfigure}{0.24\textwidth}
+   \centering
+   \includegraphics[width=1\linewidth]{fig/vai/17_auto.png}
+ \end{subfigure}
+ 
+ \begin{subfigure}{0.24\textwidth}
+   \centering
+   \includegraphics[width=1\linewidth]{fig/vai/23.JPG} 
+   \caption{}
+ \end{subfigure}\vspace{1mm}
+ \begin{subfigure}{0.24\textwidth}
+   \centering
+   \includegraphics[width=1\linewidth]{fig/vai/23_gt.png}
+   \caption{}
+ \end{subfigure}
+ \begin{subfigure}{0.24\textwidth}
+   \centering
+   \includegraphics[width=1\linewidth]{fig/vai/23_manual.png}
+   \caption{}
+ \end{subfigure}
+ \begin{subfigure}{0.24\textwidth}
+   \centering
+   \includegraphics[width=1\linewidth]{fig/vai/23_auto.png}
+   \caption{}
+ \end{subfigure}
+ \caption{Full tile predictions using manual and automatic training data for Vaihingen dataset. Each row shows from top to bottom: tiles No.30, No.13, No.17, No.23. (a) true orthophotos, (b) ground truth, (c) predictions using manually labeled annotations as training data, (d) predictions using automatically inferred annotations as training data}
+ \label{fig:vai_seg}
+ \end{figure*}
+
+
+
+\section{Discussion}
+\label{sec:disc}
+Compared with other studies on automatic generation of image annotations, we firstly propose the concept of propagating labeled aerial imagery to unlabeled UAV imagery to generate image annotations on a large scale, which can substantially reduce manual labor by utilizing redundant remote sensing data. Although label propagation has been proved to be an effective way to generate image annotations automatically, the state-of-the-art label propagation approaches still face the challenge of inconsistency between source data and target images, especially when they are acquired from different views. Since propagated labels inevitably contain errors, we model labeling uncertainties by introducing additional geometric and radiometric evidence via the Bayesian inference. In view of the probabilistic nature of our model, we optimize the inferred annotations in a fully connected CRF model defined in image domain. In this context, the proposed method takes advantages of multi-domain information and yield image annotations with both high semantic accuracy and precise boundary partitions.
+
+In view of the low completeness and low accuracy of the initial image annotations, complementary additional information plays an important role for accurate inference. The probabilistic nature of our model allows us to flexibly incorporate different types of evidence, yet appropriate selection and combination of auxiliary information contribute to more accurate and efficient inference. As we integrate additional information by estimating its distribution for each category, it is crucial that each class shows a unique distribution on that attribute or, more broadly, on combinations of attributes. For instance, based on only height values, the ground can be easily distinguished from buildings, but hardly differentiated from the grass as they have similar height distributions; given NDVI values in addition, the three categories can be well discriminated. In this sense, our inference is not restricted to the annotated categories, but can also work even without initial annotations as long as the auxiliary information has distinctive characteristics on each category. 
+% It needs to be noted that our method is not only applicable for aerial images, but also for other remotely sensed images or terrestrial images, thus opening up new possibilities for scalable automatic image annotation.
+
+Another merit of the proposed method lies in its ability to preserve precise class boundaries, which is inherited from the characteristics of the CRF model. While manual annotating usually has low accuracy at class boundaries, especially for objects with curvy or complicated shapes such as trees, our method utilize the image contextual information and are inherently sensitive to image gradients, thus the inferred annotations generally exhibit a higher accuracy at class boundaries. 
+
+On the other hand, our method also has some limitations. First, the distribution functions of a certain attribute for different objects is empirically defined, its parameters need to be fine-tuned according to the image statistics of the specific dataset. Besides, our method is sensitive to shadow as it affects the spectral properties of images. In our experiment, errors of the inferred annotations are mostly distributed in shaded areas. Therefore it is advised to perform shadow detection and removal as pre-processing in order to achieve higher semantic accuracy.
+
+
+
+
+
+
+
+\section{conclusion}
+\label{sec:conc}
+Abundant image annotations are indispensable for training tasks in semantic segmentation or scene parsing. Traditional image annotation relies on manual labeling, which is quite labor-intensive and unpractical for large-scale tasks. We proposed in this paper a method for automatic image labeling by label propagation based on a Bayesian-CRF model. In the presence of weak annotations and auxiliary information such as 3D data, our method is able to yield abundant high-quality image annotations in an automatic way. The automatically generated annotations not only have high semantic accuracy, but also preserve accurate class boundaries. Besides, the inferred annotations can be used as pseudo ground-truth data for training models, and achieve comparable accuracy as manually labeled ground-truth data while reducing manual labor significantly.
+
+

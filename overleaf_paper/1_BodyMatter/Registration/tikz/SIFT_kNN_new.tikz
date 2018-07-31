@@ -1,0 +1,137 @@
+% This file was created by matlab2tikz.
+%
+%The latest updates can be retrieved from
+%  http://www.mathworks.com/matlabcentral/fileexchange/22022-matlab2tikz-matlab2tikz
+%where you can also make suggestions and rate matlab2tikz.
+%
+\begin{tikzpicture}
+
+\begin{axis}[%
+width=.5\linewidth,
+height=.15\textheight,
+scale only axis,
+unbounded coords=jump,
+grid = major,
+xmin=1,
+xmax=100,
+xlabel style={font=\color{white!15!black}},
+xlabel={Number of nearest neighbors},
+ymin=0,
+ymax=800,
+ytick={ 0,200 ,  400,  600, 800},
+ylabel style={font=\color{white!15!black}},
+label style={font=\small},
+tick label style={font=\small},
+ylabel={Number of correct matches},
+ylabel near ticks,
+label style={font=\small},
+tick label style={font=\small},
+axis background/.style={fill=white},
+axis x line*=bottom,
+axis y line*=left
+]
+\addplot [color=blue,thick, forget plot]
+  table[row sep=crcr]{%
+	 1    83  \\
+     2   106  \\
+     3   125  \\
+     4   144  \\
+     5   159  \\
+     6   171  \\
+     7   181  \\
+     8   190  \\
+     9   206  \\
+    10   217  \\
+    11   226  \\
+    12   237  \\
+    13   244  \\
+    14   250  \\
+    15   256  \\
+    16   265  \\
+    17   270  \\
+    18   275  \\
+    19   283  \\
+    20   287  \\
+    21   298  \\
+    22   308  \\
+    23   318  \\
+    24   322  \\
+    25   326  \\
+    26   329  \\
+    27   336  \\
+    28   341  \\
+    29   349  \\
+    30   352  \\
+    31   358  \\
+    32   362  \\
+    33   368  \\
+    34   376  \\
+    35   388  \\
+    36   392  \\
+    37   399  \\
+    38   409  \\
+    39   413  \\
+    40   420  \\
+    41   422  \\
+    42   427  \\
+    43   433  \\
+    44   437  \\
+    45   442  \\
+    46   450  \\
+    47   450  \\
+    48   455  \\
+    49   459  \\
+    50   465  \\
+    51   470  \\
+    52   476  \\
+    53   481  \\
+    54   483  \\
+    55   490  \\
+    56   495  \\
+    57   496  \\
+    58   502  \\
+    59   506  \\
+    60   512  \\
+    61   517  \\
+    62   523  \\
+    63   528  \\
+    64   531  \\
+    65   533  \\
+    66   535  \\
+    67   541  \\
+    68   545  \\
+    69   552  \\
+    70   557  \\
+    71   564  \\
+    72   568  \\
+    73   571  \\
+    74   577  \\
+    75   581  \\
+    76   585  \\
+    77   588  \\
+    78   591  \\
+    79   592  \\
+    80   596  \\
+    81   598  \\
+    82   600  \\
+    83   605  \\
+    84   612  \\
+    85   620  \\
+    86   626  \\
+    87   630  \\
+    88   637  \\
+    89   642  \\
+    90   648  \\
+    91   654  \\
+    92   657  \\
+    93   658  \\
+    94   662  \\
+    95   668  \\
+    96   673  \\
+    97   677  \\
+    98   681  \\
+    99   688  \\
+   100   690  \\
+};
+\end{axis}
+\end{tikzpicture}%

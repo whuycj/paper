@@ -1,0 +1,380 @@
+%-------------------------------------------------------------------------------
+%
+% TUM Dissertation Template
+%
+% For usage instructions see README.md
+%
+% Authors:
+%   Andre Richter, andre.richter@tum.de
+%   Michael Vonbun, michael.vonbun@tum.de
+%   Christian Herber, christian.herber@tum.de
+%   Stefan Wallentowitz, stefan.wallentowitz@tum.de
+%
+%-------------------------------------------------------------------------------
+\documentclass[%
+  % layouttitlepage,            % layout help rules (to see if you need
+  %                             % some extra vspace in your title etc.)
+  headings = standardclasses, % serif fonts for headings
+  % headings = big,             % If you use serif fonts for headings (above option
+  %                             % uncommmented), uncomment this one to get smaller
+  %                             % headings
+  % sansseriftitlepage,         % sans serif title page
+]{tumDiss}
+\usepackage[utf8]{inputenc}
+
+
+
+%-------------------------------------------------------------------------------
+% Binding correction for the title page.
+% WARNING: ONLY NEEDED FOR THE PRINT VERSION!
+%
+% After printing and binding, the left part of the titlepage may lose
+% significant space, for example due to overlap from glue binding.
+% You can increase the left margin of the title page with this option.
+% This value of 8mm was measured for glue binding a thesis that was printed by
+% the TUM Fachschaft EI and ~140 pages.
+%-------------------------------------------------------------------------------
+% \titlepagebindingcor{8mm}
+
+%-------------------------------------------------------------------------------
+% Binding correction for everything else.
+% Does not affect titlePageBindingCor!
+%
+% WARNING: THIS OPTION CAN SHAKE UP YOUR CURRENT LAYOUT.
+% If you want to use it, it is best to work with it from the very start. Adding
+% it when finishing your dissertation might get you into trouble.
+%
+% Search http://texdoc.net/texmf-dist/doc/latex/koma-script/scrguien.pdf for
+% "BCOR" for further reading.
+%-------------------------------------------------------------------------------
+% \KOMAoptions{BCOR=3mm}
+
+
+
+%-------------------------------------------------------------------------------
+% Faculty
+%-------------------------------------------------------------------------------
+\faculty{Ingenieurfakultät Bau Geo Umwelt}
+
+%-------------------------------------------------------------------------------
+% Degree
+%-------------------------------------------------------------------------------
+\degree{Doktor-Ingenieurs (Dr.-Ing.)}
+
+%-------------------------------------------------------------------------------
+% Title
+%
+% IMPORTANT:
+%
+% You must add manual line breaks here. If you don't, you'll get uneven spacing
+% between the lines.
+% YOU ALSO NEED THE BREAK AT THE LAST LINE.
+%-------------------------------------------------------------------------------
+\title{%
+ semantic information extraction from UAV imagery and aerial imagery\\
+}
+% \subtitle{That is extended by using an additional subtitle}
+
+%-------------------------------------------------------------------------------
+% People
+%-------------------------------------------------------------------------------
+\author{Xiangyu Zhuo, M.Sc.}
+\vorsitz{X}
+\erstpruef{Univ.-Prof. Dr.-Ing. habil. Richard H. G. Bamler}
+
+% Use this one for a TUM professor
+% \zweitpruef{}
+
+% Or this one for an external professor
+\zweitpruef[Technische Universität Graz, Österreich]{Ass.Prof. Dipl.-Ing. Dr. techn. Friedrich Fraundorfer}
+
+% Optionally, add a third examiner
+\drittpruef[Universität Osnabrück]{Prof. Dr.-Ing. Peter Reinartz}
+
+%-------------------------------------------------------------------------------
+% Hand in date
+%
+% This is the date of your personal hand-in at the TUM doctoral office.
+%-------------------------------------------------------------------------------
+\date{01.01.2016}
+
+%-------------------------------------------------------------------------------
+% Accepted date
+%
+% You can set this after your thesis was accepted. For handing in,
+% it is not needed (at least for the Electrical Engineering faculty).
+%-------------------------------------------------------------------------------
+\dateaccepted{10.05.2016}
+
+
+
+%-------------------------------------------------------------------------------
+% Change language, e.g. to german
+%-------------------------------------------------------------------------------
+% \usepackage[ngerman]{babel}
+
+%-------------------------------------------------------------------------------
+% Compatibility issues
+%-------------------------------------------------------------------------------
+% If you need pstricks, load it here before everything else.
+% Otherwise, tikz patterns won't work
+%\usepackage{pstricks}
+
+%-------------------------------------------------------------------------------
+% Suggested standard packets are included here
+%-------------------------------------------------------------------------------
+% Loading scrhack fixes:
+%   (1) KOMA-Script incompatible macros used in listings package.
+%   (2) Inconsistent anchors in hyperref.
+
+\usepackage{scrhack}
+
+% glossary functionality
+\usepackage[
+  toc,
+  acronym,
+  style = long
+]{glossaries}
+\makeglossaries
+
+% figure inclusion
+% \usepackage[
+%   caption = false,
+%   font    = footnotesize
+% ]{subfig}
+\usepackage{graphicx}
+\usepackage{pgfplots}
+\usepackage{pgfplotstable}
+\tikzset{>=stealth}
+\usetikzlibrary{patterns}
+\usetikzlibrary{pgfplots.statistics}
+
+
+
+% math and equations
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsfonts}
+\usepackage{upgreek}
+
+% enumeration
+\usepackage{enumerate}
+
+% hyperlinks
+\usepackage{url}
+\usepackage[
+  hidelinks,
+  bookmarksnumbered
+]{hyperref}
+
+
+% If hyperref is used, references to tables and figures link to their captions
+% and not the actual tables or figures. This is especially unwanted for figures,
+% because their captions are below the figure so that clicking on a link just
+% shows the captions and the figure is invisible.
+%
+% Using the caption package fixes this behaviour.
+\usepackage{caption}
+
+
+% Support for siunitx
+\usepackage{siunitx}
+\sisetup{
+  exponent-product = \cdot,
+  output-product   = \cdot,
+  per-mode         = symbol-or-fraction,
+  quotient-mode    = fraction,
+  binary-units     = true
+}
+
+% No widows and orphans
+\usepackage[all]{nowidow}
+
+
+%-------------------------------------------------------------------------------
+% Include custom packages here
+%-------------------------------------------------------------------------------
+
+\graphicspath{{./1_BodyMatter/Introduction/Figures/}{./1_BodyMatter/Review/Figures/}{./1_BodyMatter/Introduction/Figures/}{./1_BodyMatter/Basic/Figures/} {./1_BodyMatter/Review/Figures/} {./1_BodyMatter/Registration/}{./1_BodyMatter/Registration/tikz/} {./1_BodyMatter/Segmentation/} {./1_BodyMatter/OSM/}}
+\usepackage[export]{adjustbox}
+\usepackage{array}
+\usepackage{algorithm}
+\usepackage[noend]{algpseudocode}
+\usepackage[english]{babel}
+\usepackage{bm}
+\usepackage{booktabs}
+\usepackage{cite}
+\usepackage{comment,soul,xcolor}
+\usepackage{enumitem}
+\usepackage{epsfig}
+\usepackage[official]{eurosym}
+\usepackage[mathscr]{euscript}
+\usepackage{filecontents}
+\usepackage{float}
+\usepackage{mathrsfs}
+\usepackage{mathtools}
+\usepackage{multicol,multirow}
+\usepackage{float}
+\usepackage{gensymb}
+\usepackage{geometry}
+\usepackage{graphicx}
+\usepackage{hhline}
+\usepackage[section]{placeins}
+\usepackage{pgfplots} 
+\usepackage{rotating}   
+%\usepackage{setspace} 
+\usetikzlibrary{spy,calc}   
+\usepackage{subcaption}
+%\usepackage{subfig}
+\usepackage{url}
+%\usepackage{wrapfig}  
+\usepackage{xargs}
+\usepackage{tikz}
+\usepackage{tikzscale}
+%\usepackage[caption=false]{subfig}
+\usepackage{url}
+
+
+%-------------------------------------------------------------------------------
+% TUM CI colors for PGF
+%-------------------------------------------------------------------------------
+\definecolor{grey60} {RGB} {102, 102, 102} % 60% grey
+\definecolor{c_roof}{RGB}{192,0,0}
+\definecolor{c_building}{RGB}{0,0,128}
+\definecolor{c_ground}{RGB}{128,128,128}
+\definecolor{c_car}{RGB}{255,255,0}
+\definecolor{c_veg}{RGB}{0,192,64}
+\definecolor{c_clut}{RGB}{255,255,255}
+\definecolor{royalblue}{rgb}{0.25, 0.41, 0.88}
+\definecolor{yellowgreen}{rgb}{0.6, 0.8, 0.2}
+\definecolor{lightpink}{rgb}{1.0, 0.71, 0.76}
+
+\pgfplotscreateplotcyclelist{tum}{
+  {color = TUMBlack,        mark = o,                     mark size = 3.8},
+  {color = TUMBlue,         mark = star,                  mark size = 3.8},
+  {color = TUMBlueDarker,   mark = square,                mark size = 3.8},
+  {color = TUMBlueLighter,  mark = triangle,              mark size = 3.8},
+  {color = TUMBlueDarkest,  mark = diamond,               mark size = 3.8},
+  {color = TUMBlueLightest, mark = |,                     mark size = 3.8},
+  %%
+  {color = TUMBlack,        mark = *,                     mark size = 3.8},
+  {color = TUMBlue,         mark = 10-pointed star,       mark size = 3.8},
+  {color = TUMBlueDarker,   mark = square*,               mark size = 3.8},
+  {color = TUMBlueLighter,  mark = triangle*,             mark size = 3.8},
+  {color = TUMBlueDarkest,  mark = diamond*,              mark size = 3.8},
+  {color = TUMBlueLightest, mark = Mercedes star flipped, mark size = 3.8}
+}
+
+\pgfplotsset{/pgfplots/bar cycle list/.style={/pgfplots/cycle list={
+      {black, mark = none, fill = TUMBlue},
+      {black, mark = none, fill = TUMBlueLightest},
+      {black, mark = none, pattern = north east lines, pattern color = TUMBlue},
+      {black, mark = none, pattern = north west lines, pattern color = TUMBlue},
+      {black, mark = none, pattern = north east lines, pattern color = TUMOrange},
+      {black, mark = none, pattern = north west lines, pattern color = TUMOrange},
+      {black, mark = none, pattern = horizontal lines, pattern color = TUMOrange},
+      {black, mark = none, pattern = crosshatch,       pattern color = TUMOrange}
+    }
+  }
+}
+
+%-------------------------------------------------------------------------------
+% Default values for pgfplots
+%-------------------------------------------------------------------------------
+\newcommand{\figureHeight}{0.5625} %% 16:9
+\pgfplotsset{
+  compat           = 1.13,
+  grid             = major,
+  enlarge x limits = 0,
+  cycle list name  = tum,
+  major grid style = {dotted},
+  minor grid style = {dotted},
+  legend style     = {
+    at     = {(0.98,0.96)},
+    anchor = north east,
+  },
+  width            = \hsize * 0.9,
+  height           = \hsize * 0.9 * \figureHeight,
+}
+
+%-------------------------------------------------------------------------------
+% Correct bad hyphenation here
+%-------------------------------------------------------------------------------
+\hyphenation{op-tical net-works semi-conduc-tor}
+
+%-------------------------------------------------------------------------------
+% Acronyms (will be sorted alphabetically)
+%-------------------------------------------------------------------------------
+\newacronym{uav}{UAV}{Unmanned Aerial Vehicle}
+\glsadd{UAV}
+
+\newacronym{cnn}{CNN}{Convolutional Neural Network}
+\glsadd{CNN}
+
+\newacronym{fcn}{FCN}{Fully Convolutional Network}
+\glsadd{FCN}
+
+
+
+
+%-------------------------------------------------------------------------------
+% Actual document starts here
+%-------------------------------------------------------------------------------
+\begin{document}
+\frontmatter
+\maketitle
+
+
+
+\include{0_FrontMatter/abstract}
+\include{0_FrontMatter/zusammenfassung}
+\include{0_FrontMatter/acknowledge}
+
+
+
+%-------------------------------------------------------------------------------
+\tableofcontents
+\listoffigures
+\listoftables
+% \printglossary[type=\acronymtype, nonumberlist]
+
+
+
+%-------------------------------------------------------------------------------
+\mainmatter
+
+\include{1_BodyMatter/Introduction}
+\include{1_BodyMatter/Basic/basic}
+\include{1_BodyMatter/Review}
+\include{1_BodyMatter/Registration/registration}
+\include{1_BodyMatter/Segmentation/segmentation}
+\include{1_BodyMatter/OSM/osm}
+\include{1_BodyMatter/Conclusion}
+
+
+
+
+%-------------------------------------------------------------------------------
+% Bibliography
+%-------------------------------------------------------------------------------
+%\backmatter
+\bibliographystyle{unsrturl-custom}
+\bibliography{bibliography}
+
+
+
+
+%%%%%%%%%%%%%%
+% BackMatter %
+%%%%%%%%%%%%%%
+\cleardoublepage
+\begin{appendix}
+\include{2_BackMatter/appendix1_Publications}
+%\include{2_BackMatter/appendix2_Datasets}
+%\include{2_BackMatter/measure}
+\end{appendix}
+
+
+
+
+\end{document}

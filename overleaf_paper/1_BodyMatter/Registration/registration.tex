@@ -1,0 +1,1589 @@
+\chapter{Automatic UAV Image Geo-Registration by Matching UAV Images to Georeferenced Image Data}
+\label{ch:registration}
+
+
+\newcolumntype{x}{l}
+\newcolumntype{X}{>{\footnotesize}l}
+\newcolumntype{v}[1]{>{\raggedright\hspace{0pt}}p{#1}}
+\newcolumntype{V}[1]{>{\scriptsize\raggedright\hspace{0pt}}p{#1}}
+
+
+
+
+
+\newcommandx{\note}[2][1=]{\todo[linecolor=red,backgroundcolor=red!25,bordercolor=red,#1]{#2}}
+
+
+Emerging as novel image acquisition platforms, Unmanned Aerial Vehicles (UAVs) bridge the gap between aerial and terrestrial photogrammetry and offer an alternative to conventional airborne image acquisition systems. 
+In comparison to airborne or satellite remote sensing, UAVs stand out for low cost, the utility to be used in hazardous or inaccessible areas and the ability to achieve high spatial and temporal resolutions.
+Table \ref{tab:comp_UAV} compares the main features of UAVs and manned aircrafts based on the surveys of \cite{eisenbeiss2009uav} and \cite{nex2014uav}. 
+In contrast with manned aircrafts, UAVs have smaller coverage due to lower flight altitude, but they are able to achieve high ground sampling distance (GSD) with lower cost and better flexibility.
+While manned aircrafts require big landing fields and pilots, UAVs only need small landing sites and can be remotely controlled, therefore they can work even in hazardous areas and severe weather conditions.
+%The joint use of complementary data from different domains can improve the results of various applications, e.g., refining an existing map, precise monitoring, or 3D reconstructions.
+Hence, UAVs have been widely involved in remote sensing applications, such as disaster management, urban development, documentation of cultural heritage or agriculture management \cite{colomina2014unmanned}. 
+
+
+\begin{table}[tbp]
+  \begin{center}
+  %\footnotesize 
+  \small
+  \begin{tabular}{@{}p{.29\linewidth}p{.31\linewidth}p{.34\linewidth}@{}}
+    \toprule
+    {} & {\textbf{UAV Photogrammetry}} & {\textbf{Manned Aircraft Photogrammetry}} \\
+    \cmidrule(){1-3}
+    Coverage & $m^{2}$ - $km^{2}$ & $km^{2}$ \\
+    \addlinespace
+    % %
+    Image resolution/GSD& $mm - cm$ & $cm-dm$ \\
+    \addlinespace
+    % %
+    Geo-registration possibility &  low quality GNSS/IMU & high quality GNSS/IMU \\
+    &meter-level accuracy &centimeter-level accuracy\\
+    \addlinespace
+    % %
+    Price and operating cost&low - moderate&high\\ 
+    \addlinespace
+    % %
+    Flexibility & applicable in hazardous areas & less mobile\\ 
+  & works in cloudy/drizzly weather & weather-dependent \\
+  & remotely controlled & pilot needed \\
+  \bottomrule
+  \end{tabular}
+  \end{center}
+  \caption {Comparison between UAV and manned aircraft photogrammetry}
+\label{tab:comp_UAV}
+\end{table}
+
+
+Accurate geo-registration of UAV imagery is a prerequisite for UAV geolocalization and many photogrammetric applications, such as generating georeferenced orthophotos, 3D point clouds or DSMs. 
+However, accurate geo-registration of UAV imagery is still an open problem. Limited by on-board payload restrictions, UAVs are equipped with lightweight GNSS/IMU systems, whose georeferencing accuracies are in the range of meters \cite{chiabrando2013direct} and far from the centimeter-level accuracy of airborne photogrammetry \cite{jacobsen2010, Zhao2014122}. 
+In order to achieve higher geo-registration accuracy beyond hardware limits, we use a pre-georeferenced aerial or satellite image as a reference, and register the UAV image to the reference image with a novel feature-based image matching method.
+%in the coordinate system of the reference dataset by means of bundle block adjustment. 
+%The aim is to achieve high accuracy for UAV geo-registration beyond hardware limits.
+
+% \begin{table}[tbp] 
+% \begin{center}
+% \footnotesize 
+%  \begin{tabular}[height=2cm]{|l|l| l|}
+%  \hline
+%   & UAV photogrammetry &  Manned aircraft photogrammetry\\\hline
+%   Coverage& $m^{2}$ - $km^{2}$& $km^{2}$\\\hline
+%   Image resolution/GSD& $mm - cm$ & $cm-dm$ \\\hline
+%   \multirow{2}{*}{Geo-registration possibility}& low quality GNSS/IMU & high quality GNSS/IM\\
+%   &meter-level accuracy &centimeter-level accuracy\\\hline
+%   Price and operating cost&low - moderate&high\\\hline
+%   \multirow{3}{*}{Flexibility} & applicable in hazardous areas& less mobile\\ 
+%   & works in cloudy/drizzly weather & weather-dependent \\
+%   & remotely controlled & pilot needed \\ \hline
+% \end{tabular}  
+% \end{center}
+% \caption {Comparison between UAV and manned aircraft photogrammetry}
+% \label{tab:comp_UAV}
+% \end{table}
+
+
+In the field of image matching, numerous algorithms for different matching scenarios have been proposed in the last few decades.
+%While most of them rely on image pairs from the same domain with low temporal changes of the scene and moderate baselines between the image centers, it is still an open question to match images from multi-platforms, e.g., UAVs, manned aircrafts and satellites.
+The biggest challenge for UAV and aerial image matching lies in the substantial differences in their scales, viewing directions and temporal changes. 
+For instance, the flight altitude of UAV platforms is about $\SI{50}{\m} - \SI{120}{\m}$ above the earth whereas aerial images are usually captured at $\SI{800}{\m} - \SI{1500}{\m}$ from different viewing directions. 
+Although state-of-the-art feature-based image matching methods are generally working fine for many different image pairs and are said to be invariant to changes in viewpoints, wider baselines and local changes of the scene, they surprisingly failed in many of our test cases. 
+Figure \ref{fig:failure} illustrates two typical cases of UAV and aerial image matching using SIFT \cite{lowe2004distinctive}.
+
+\begin{figure}[tbp]
+    \centering
+       \begin{subfigure}[b]{0.47\columnwidth}
+           \centering
+           \includegraphics[width=\columnwidth]{figures_1/container_sift.JPG}
+           \caption[]{\texttt{Container}}%
+           {{\small }}
+           \label{fig:failure_container}
+       \end{subfigure}
+       \hfill
+       \begin{subfigure}[b]{0.5\columnwidth}  
+           \centering 
+           \includegraphics[width=\columnwidth]{figures_1/highway_sift.JPG}
+           \caption[]{\texttt{Highway}}%
+           {{\small }}    
+           \label{fig:failure_highway}
+       \end{subfigure}
+       \caption{Typical cases from the datasets (a) \texttt{Container} and (b) \texttt{Highway} showing the results of matching UAV and aerial images using SIFT, where, left of the subfigure is a downsampled UAV image and right is a cropped aerial image. Green lines indicate the matches detected by SIFT, almost all of them are wrong.}
+        \label{fig:failure}
+\end{figure}
+
+Even though the scale difference has been eliminated by down sampling the UAV image towards the aerial image and the aerial image has been cropped to the same region as the UAV image, no reliable set of correct matches could be found in the similar looking image pairs. 
+This finding motivated us to analyze the reasons for the failure and to develop a new image matching strategy facilitating a successful and robust matching of imagery with wide baselines and substantial geometrical and temporal changes.
+%An exhaustive analysis on numerous multi-platform images was carried out using feature-based matching methods to show the problems but also the reasons for the failure. 
+%To this end, we propose a novel feature matching method, which can robustly handle the large differences regarding scale and rotation of image pairs. 
+%The method is comprised of a dense feature detection scheme, a one-to-many matching strategy and a global geometric constraint for verifying multiple matching hypotheses and delivers thousands of valid matches between UAV and reference imagery whereas standard feature-based matching methods mostly fail. 
+%Those abundant and reliable matches contribute to the success of the bundle block adjustment of UAV images. 
+%To analyze the accuracy of our matching methods a series of experiments involving different scenarios are conducted.
+The obtained 2D matches are used for geo-registration of the UAV image with reference to the aerial image.
+%A comparison of triangulated feature points from aerial and UAV images, as well as highly accurate check points  
+%An analysis of 3D errors from triangulated points and highly accurate 3D check points of two scenes are computed.
+The results demonstrate that our approach achieves decimeter-level co-registration accuracy and comparable absolute geo-registration accuracy as the reference image.
+
+In summary, the main innovations of this paper cover following aspects:
+\begin{itemize}[leftmargin=*,labelsep=4mm]
+\item An exhaustive analysis of limiting cases of SIFT-based image matching for UAV and aerial image pairs. The reasons for the matching failure are identified by investigating the influence of different SIFT and ASIFT parameters, image rotations and the ratio-test.
+\item A novel feature-matching pipeline constituted of a dense feature detection scheme, a one-to-many matching strategy and a global geometric verification scheme.
+\item A comprehensive analysis of the matching quality with ground-truth correspondences and a demonstration of various experiments for evaluating absolute and relative accuracies of generated  photogrammetric 3D products.
+%\item The robustness of the matching methodology in complicated scenes and accuracy evaluations are showcased. Beside the analysis of the 2D matching quality with ground-truth correspondences, the matches are used for merging UAV and aerial 3D point clouds and for generating georeferenced DEMs. A 3D accuracy evaluation is conducted by comparing 3D point clouds from geo-registered UAV images with georeferenced aerial point clouds and precisely measured ground control points (GCPs).
+\end{itemize}
+
+The paper is organized as follows: Section \ref{sec:RelWork} gives a review of related works; Section \ref{sec:Analysis} introduces limiting cases for SIFT matching and outlines the key factors accounting for the failure of the matching. 
+Section \ref{sec:method} proposes the novel feature matching method for a robust and reliable matching result for wide-baseline image pairs.
+In Section \ref{sec:experiments}, various experiments are carried out to validate the accuracy of the proposed matching method. 
+Beside a qualitative and quantitative analysis of the obtained matches of UAV and aerial images, 3D errors of triangulated matches from geo-registered UAV images are compared towards 3D points from aerial imagery and towards terrestrial measured ground control points (GCPs). 
+Additionally, DSMs generated from geo-registered UAV images and from aerial images are compared and a joint 3D point cloud is presented.
+Finally, Section \ref{sec:disc} discusses the applicability and limitations of the proposed method and Section \ref{sec:conclusion} concludes the paper and describes further applications.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Related Work}\label{sec:RelWork}
+The availability of georeferenced imagery is a prerequisite for many photogrammetric tasks, such as the generation of registered 3D point clouds, DSMs, orthorectification, mosaicking or 3D reconstructions of buildings. 
+The key for precise georeferencing of the mentioned products lies in an accurate geo-registration of the captured images, which can be tackled in different ways.
+In the field of aerial photogrammetry high-end GNSS/IMU localization sensors are used which allows direct georeferencing of the images without the need of external GCPs or photogrammetric adjustments in a post-processing step. 
+Many established systems in aerial photogrammetry have access to such accurate sensors and achieve centimeter-level registration accuracy. 
+The relatively low-cost \texttt{DLR 3K} sensor system \cite{kurz2012low} presents a camera frame carried by either a airplane or helicopter and consists of three Canon EOS 1Ds Mark II cameras looking in nadir, forward, and backward direction developed for real time disaster monitoring.
+The synchronized image acquisition and localization information provided by the expensive and heavy GNSS/IMU system ($\SI{4}{\kg}$ in total) allows for direct georeferencing accuracies of $\SI{10}{\cm}$ \cite{kurz2014performance}.
+The \texttt{Vexcel UltraCam} \cite{ultracam} offers a high level optical sensor for high resolution aerial photogrammetry with more than 100 megapixel. 
+Combined with the high-end \texttt{UltraNav}-GNSS/IMU system \cite{ultranav}, $\SI{5}{\cm}$ accuracy for direct georeferencing can be achieved.
+Due to payload limitations, many commercial UAVs are usually equipped with lightweight sensors providing localization accuracies in the range of meters \cite{verhoeven2013positioning}, which is not sufficient enough for photogrammetric applications using direct georeferencing. 
+%This accuracy level is sufficient for rough geo-registration usable for applications like rapid response or disaster assessment as shown in \cite{nex2014uav} but not applicable if higher georeferencing is needed.
+An investigation regarding the ability of direct georeferencing with UAV systems shows that the geolocalization accuracy of current UAV systems is still too low to perform direct applications of photogrammetry at very large scale \cite{chiabrando2013direct}.
+
+For this reason, image-based methods are usually utilized to facilitate geo-registration of UAV imagery in centimeter-level accuracy.
+One way to augment geo-registration results is to deploy GCPs, which is even recommended for high-end devices due to the existence of systematic errors \cite{gerke2016accuracy}. 
+Nevertheless, the deployment of GCPs is often expensive, requires fieldwork operations and is unpractical or even impossible for hazardous or inaccessible regions. 
+Due to the growing accessibility of high resolution aerial and satellite imagery, image matching approaches present a promising alternative for geo-registration. 
+Here, geo-registration of UAV imagery is done by matching UAV images with georeferenced databases, such as 3D models, aerial images, orthophotos or satellite images.
+An accurate geo-registration of UAV images depends on the accuracy and reliability of the image matching result.
+%Numerous matching algorithms contributed to improve this long-standing problem of image matching, but however, there are still many cases where existing methods fail or perform poorly.
+Although image matching is a long-standing problem and lots of research has been performed in this area, still many cases exist where established methods fail or perform poorly.
+The task of matching UAV and aerial images can be characterized by wide baselines, large differences in viewpoints, and geometrical as well as temporal changes.
+Among intensity-based and frequency-based matching methods, local feature-based matching methods perform best with regard to these matching conditions \cite{zitova2003image}.
+Among various feature-based matching algorithms, SIFT \cite{lowe2004distinctive} stands out for its robust scale and rotation invariant property. 
+Although many variants and alternatives have been developed, such as its approximation SURF \cite{bay2008speeded} and the binary descriptor BRIEF \cite{calonder2010brief}, investigations demonstrate that SIFT is still more robust to viewpoint changes and common image disturbances than both BRIEF and SURF \cite{calonder2012brief}.
+ORB \cite{rublee2011orb}, which is a combination of the FAST detector \cite{rosten2010faster} and the BRIEF binary descriptor is a good choice for real-time applications but several evaluations state that it can not reach the repeatability and discriminative properties of SIFT \cite{heinly2012comparative,bekele2013evaluation,dwarakanath2012evaluating,juan2009comparison}.
+KAZE \cite{alcantarilla2012kaze} is a new development and succeeds especially in presence of deformable objects. 
+As a variant of SIFT, a full affine invariant matching framework ASIFT \cite{yu2011asift} was proposed to handle big differences in viewpoints by simulating a series of transformed images to cover the whole affine space. 
+In the case of matching images with large differences in viewpoints, ASIFT has more robust performance than SIFT, which was also confirmed in the evaluation presented in \cite{apollonio2014evaluation}.
+
+Apart from feature-based wide baseline matching, other concepts also investigate different methods for geo-registration of UAV imagery.
+Intensity-based methods, like an on-board correlation-based method to register UAV images towards aerial images in case of GNSS outages \cite{conte2009vision} or deformable template matching with image edges and entropy as feature representation \cite{fan2010registration} do usually not perform well in case of temporal and geometrical changes.
+More recent work also focus on matching terrestrial and aerial images showing extremely large viewpoints changes.
+A new feature representation using a Convolutional Neural Network (CNN) is learned for geolocalizing ground-level images with an aerial reference database \cite{lin2015learning}.
+However, manual interventions are needed to estimate the scale for ground-level queries, and the absolute orientation of the query image can hardly be estimated.
+Shan et al. \cite{shan2014accurate} synthesizes aerial views from pre-aligned Google Steet View images using depth maps and corresponding camera poses, which are then matched with aerial images using SIFT.
+A similar approach is presented by Majdik et al. \cite{majdik2015air}, where UAV images are matched with geo-tagged street view images using ASIFT achieving meter-level global accuracy.
+However, only low altitudes and oblique images facing building fa\c{c}ades are considered for the geo-registration.
+Aicardi et al. \cite{aicardi2016image} adopts an image-based approach for co-registering multi-temporal UAV image datasets, however, it only estimates the relative transformation between the epochs, while the absolute transformation of the epoch is not solved.
+Finally, Xu et al. \cite{xu2016mosaicking} presents an fast and efficient way for UAV image mosaicking without the explicit computation of camera poses, however the image mosaics are not geo-registered.
+
+
+Although considerable attempts and progress have been made regarding this topic, many of them rely on intensity-based matching methods, which are proven to be unstable in case of geometric or temporal changes. 
+In this sense, robust image matching against large scale and viewpoint differences is the key to solve the problem for which feature-based approaches are still the methods of choice.
+Some mentioned approaches focus on improving the matching result for extremely large viewpoint changes, but still do not reach the desired global georeferencing accuracy.
+
+% In addition, the accuracy of those image-based methods is limited by the performance of image matching. 
+% Despite the fact that some methods apply geometric constraints to improve the matching accuracy, they still have difficulty in matching images with large differences in scales and viewpoints. 
+
+Our approach is based on previous work \cite{koch2016new,zhuo2016fusion}, which have been proven to work for complex matching scenarios with multi-scale images. 
+Compared with the state-of-the-art works mentioned above, our method is an advancement in following aspects:
+\begin{itemize}[leftmargin=*,labelsep=4mm]
+%\item Our method does not need GNSS/IMU data to estimate the scale and orientation for image pre-alignment, which enables UAV global registration even in GNSS-denied environments.
+\item To handle the large differences in scale and rotation between image pairs, we use a novel feature-matching approach which can overcome the challenge and robustly deliver abundant matches.
+\item Our method works for data of different scales, e.g., aerial images, aerial orthophotos and satellite images.
+\item Our method achieves not only decimeter-level co-registration accuracy, but also comparable absolute accuracy as that of the reference image, which are georeferenced in the conventional photogrammetric way.
+\end{itemize}
+
+
+% \cite{kaminsky2009alignment} aligned a point cloud reconstructed from SfM with overhead images (e.g. satellite maps floor plans) by projecting the point cloud onto a ground plane and then matching image edges with the overhead image. 
+% The drawback is that GNSS information is needed to estimate the position and image edge matching does not work well if the scene is rich in texture. 
+
+
+
+%BRISK \cite{leutenegger2011brisk}, , 
+
+%most of them dealing with the reduction of computational time by approximations in specific implementations details, but rarely outperformed SIFT \cite{miksik2012evaluation,juan2009comparison}.
+%As a variant of SIFT, a full affine invariant matching framework ASIFT \cite{yu2011asift,morel2009asift} was proposed against the big differences in viewpoints by simulating a series of transformed images to cover the whole affine space. 
+%In the case of matching images with large differences in viewpoints, ASIFT has more robust performance than SIFT. 
+
+
+
+
+
+%Due to the lower performance of the on-board localization sensors , direct georeferencing of UAV imagery is not suitable for many remote sensing applications which require higher positioning accuracy. 
+% %Many attempts have been made to solve the problem of UAV global georegistration. 
+% %On-board GNSS/IMU data is usually used for direct-georeferencing with accuracies of a few meters \cite{verhoeven2013positioning}. 
+% %This accuracy level is sufficient for rough georegistration and therefore widely used for applications like rapid response or disaster assessment \cite{nex2014uav}. 
+
+
+
+% The precision of UAV geo-registration is mainly limited by the performance of the on-board hardware.
+% While aerial photogrammetry generally has access to high-end GNSS/IMU localization sensors to achieve cm geo-registration accuracy[?],  accurate geo-registration of UAVs is more challenging.
+% Due to the lower performance of the on-board localization sensors, direct georeferencing of UAV imagery is not suitable for many remote sensing applications which require higher positioning accuracy. 
+% %UAVs are usually equipped with lightweight sensors with accuracies up to few meters \cite{verhoeven2013positioning} and therefore do not provide satisfactorily registration accuracy for many remote sensing applications and direct georeferencing.
+
+% %Many attempts have been made to solve the problem of UAV global georegistration. 
+% %On-board GNSS/IMU data is usually used for direct-georeferencing with accuracies of a few meters \cite{verhoeven2013positioning}. 
+% %
+% For this reason it is generally advised to deploy Ground Control Points (GCPs) even for high-end devices \cite{gerke2016accuracy} due to the existence of systematic errors. 
+% Nevertheless, the deployment of GCPs is often expensive, requires high human interaction and is unpractical for hazardous or inaccessible regions. 
+% On the other hand, image-based approaches gained a lot of interest due to the growing accessibility of high resolution aerial and satellite imagery.
+% Geo-registration of UAV imagery is done by matching UAV images with a georeferenced database, such as 3D models, aerial images, orthophotos, satellite images or Google Street-View images.
+% These promising approaches stand out for an automatic and precise geo-registration ability with comparable accuracies to GCPs if the matching process can be done robustly and exactly.
+
+% %Recently, many studies attempted to adopt image-based approaches for UAV georegistration, i.e., to geolocalize the images by matching the images with a georeferenced database, such as 3D models, aerial images, colored orthophotos, satellite images or Google Street-View images.
+% %Image-based georegistration approaches benefit from the growing accessibility of high resolution aerial and satellite imagery and stand out for an automatic and accurate georegistration ability if the matching process can be done robustly and precisely.
+% % 
+% Current matching algorithms can be generally divided into three categories: pixel value-based methods, e.g., Normalized-Cross-Correlation (NCC), which are vulnerable to image intensity changes and geometric deformations [?]; frequency domain-based methods, e.g., wavelet transform-based methods, which are sensitive to local distortions \cite{chen2013invariant}; local feature-based methods, which outperform the other two methods in the mentioned aspects and hence are widely used for matching images with different viewpoints, resolutions and orientations \cite{zitova2003image}. 
+
+
+% SIFT and ASIFT are scale and rotation invariant in most cases, however, when it comes to the matching of UAV images and aerial images, which have large differences in scales and viewpoints, SIFT and ASIFT turn out to be unreliable and not robust enough. 
+% Even after eliminating the differences by downsampling and aligning the images, SIFT and ASIFT still fail. 
+% It was pointed out in \cite{sur2011image} that the ratio-test of SIFT \cite{lowe2004distinctive} is likely to discard correct matches when repeated patterns exist.
+
+% Although considerable attempts and progress have been made regarding this topic, they all require GNSS/IMU information for initial image alignment. 
+% In addition, the accuracy of those image-based methods is limited by the performance of image matching. 
+% Despite the fact that some methods apply geometric constraints to improve the matching accuracy, they still have difficulty in matching images with large differences in scales and viewpoints. 
+% In this sense, robust image matching against large scale and viewpoint differences is the key to solving the problem.
+
+
+
+% Our approach is based on previous work of \cite{koch2016new} and \cite{zhuo2016fusion}, which have been proven to work for complex matching scenarios with multi-scale images. 
+% Compared with the state-of-the-art works mentioned above, our method is an advancement in following aspects:
+% \begin{itemize}[leftmargin=*,labelsep=4mm]
+% \item Our method does not need GNSS/IMU data to estimate the scale and orientation for image pre-alignment, which enables UAV global registration even in GNSS-denied environments.
+% \item Against the large differences in scale and rotation between image pairs, we use a novel feature-matching approach which can overcome the challenge and robustly deliver abundant matches.
+% \item Our method works for data of different scales, e.g., aerial images, aerial orthophotos and satellite images.
+% \item Our method achieves not only decimeter-level co-registration accuracy, but also comparable absolute accuracy as that of the reference image, which are georeferenced in the conventional photogrammetry way.
+% \end{itemize}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Matching Performance Evaluation Using SIFT Features}\label{sec:Analysis}
+This section introduces different UAV and aerial image pairs and a comprehensive analysis of the matching performance using SIFT and ASIFT. 
+Although one would expect that SIFT matching can successfully match the presented images, a robust and successful matching is not possible.
+In order to figure out why the popular SIFT matching method surprisingly fails, we analyze the influence of different SIFT parameters, such as octaves and levels, the ratio-test, but also image rotations. 
+Experimental results demonstrate that the rotation invariance of SIFT is not as good as it has been considered to be and the deficiency in the rotation estimation of SIFT leads to non-optimal matching results. 
+In addition to that, many correct matches are either not nearest neighbors in feature space or are rejected after applying the ratio-test.
+%Based on this conclusion, we propose a new strategy for matching aerial images and UAV images, and compare the performance of the proposed method with SIFT and ASIFT approaches on different datasets.
+%For the experiments we use the SIFT implementation in OpenCV 3.0.
+
+\subsection{SIFT}\label{sec:SIFT}
+%Unlike matching images from the same domain, e.g., two aerial or two UAV images, matching between UAV and aerial images (typical altitudes are $\SI{50}{\m} - \SI{120}{\m}$ and $\SI{800}{\m} - \SI{1500}{\m}$ respectively) is more complicated and challenging due to the substantial $5-15\times$ scale difference. 
+%With the help of preliminary knowledge from GNSS data, in general the scale difference can be estimated and mostly eliminated by down sampling the UAV image. 
+
+% To extract sufficient and reliable image correspondences is crucial for subsequent image matching and orientation.  
+% A popular workflow works as follows \cite{sur2011image}:
+% \begin{enumerate}[leftmargin=*,labelsep=3mm]
+% \item Detect interest points in both images and compute the descriptors based on local photometry.
+% \item Match the interest points according to the similarity of descriptors.
+% \item Remove the mis-matches (outliers) by finding a subset of correspondences which are in accordance with the underlying epipolar geometry, e.g. fundamental matrix.
+% \item Determine further correspondences using guided matching, i.e., find more putative correspondences by relaxing step 2, and then prune the correspondences based on the estimated geometric constraint in step 3.  
+% \item Prune the final set of image correspondences like in step 3.
+% \end{enumerate}
+
+%According to various evaluations \cite{heinly2012comparative,bekele2013evaluation,dwarakanath2012evaluating,juan2009comparison}, SIFT has been proven to be more robust and stable than its variants like SURF and ORB and is therefor chosen for a comprehensive analysis of the matching of difficult image pairs.
+
+%In step 1, 
+Among the state-of-the-art matching algorithms, SIFT has been proven to be scale and rotation invariant and outperform other local descriptors in various  evaluations \cite{heinly2012comparative,bekele2013evaluation,dwarakanath2012evaluating,juan2009comparison}. Besides, the ratio-test proposed by Lowe \cite{lowe2004distinctive} is widely applied to discard mismatches. 
+In view of the substantial differences in scale and rotation of the UAV image and the aerial image, it makes sense to implement the SIFT matching algorithm (we use the OpenCV 3.0 implementation).
+This matching method is noted as "standard SIFT" in the following text.
+
+%In the context of matching images with repetitive structures, Step 2 is critical as presented in \cite{sur2011image} and \cite{mok2011serp}. 
+% Since the global threshold on the euclidean distance between descriptors in step 2 does not perform well \cite{lowe2004distinctive}, 
+% the ratio-test proposed by Lowe is widely applied to discard mismatches by rejecting all potential matches with similar descriptors, i.e., to impose that the ratio of the distances to the first and the second nearest neighbor is smaller than a certain threshold. 
+The ratio-test discards mismatches by rejecting all potential matches with similar descriptors. It works well in most cases, however, applying the ratio-test in feature-based matching methods for images with repetitive structures often causes problems with similar descriptors. 
+In this case, the distance ratio can be so high that these features would probably be defined as outliers.
+This can be critical especially when only a few correspondences remain after matching.
+To investigate how many correct matches are actually discarded by the ratio-test, we implemented SIFT matching and counted the correct matches before and after the ratio-test.
+Particularly, the distances of first two nearest neighbors are computed and compared with the threshold. 
+Considering that the number of matches can be numerous and it is unrealistic to check every single match manually, we therefore computed the fundamental matrix between the two images with dozens of manually selected image correspondences, and then apply the epipolar constraint using the derived fundamental matrix to filter the raw matches. 
+Afterwards, the filtered matches are again checked by manual inspection to ensure the purity of correct matches.
+
+It needs to be pointed out that only a manually cropped part of the aerial image with almost the same image content of the UAV image was used for interest point detection, otherwise SIFT would fail to find correct matches for any dataset.
+This simplification of the matching problem is not feasible in practice and is only used for this analysis.
+The proposed method is able to match the original uncropped image pairs as this will be discussed in Section \ref{sec:experiments}.
+
+To ensure the best matching result using the SIFT detector and descriptor we comprehensively tested different parameters. 
+Specifically, we analyzed the effect of different ratio-test thresholds and different parameters of the SIFT detection, like the number of octaves and levels per octave. 
+Other parameters were kept constant as they have only minor effect on the matching result. 
+Concretely, we set the contrast threshold to $0.04$, the edge threshold to $10$ and the sigma of the Gaussian to $1.6$. 
+An extensive analysis was carried out for all of the datasets in Figure \ref{fig:datasets}, while only the results of the \texttt{Container} dataset is depicted.
+Nevertheless, we found similar results for all of our image pairs. 
+
+\begin{figure}[tbp]
+    \centering
+       \begin{subfigure}[b]{0.243\textwidth}
+           \centering
+           %\caption{Rural}
+           \includegraphics[width=\textwidth]{figures_dataset/container_org_air.jpg}
+       \end{subfigure}
+       \hfill
+       \begin{subfigure}[b]{0.243\textwidth}  
+           \centering 
+           %\caption{Urban1}
+           \includegraphics[width=\textwidth]{figures_dataset/eichenau_org_air.jpg}
+       \end{subfigure}
+       \hfill
+       \begin{subfigure}[b]{0.243\textwidth}  
+           \centering 
+           %\caption{Pool}
+           \includegraphics[width=\textwidth]{figures_dataset/swimmingpool_org_air.jpg}
+       \end{subfigure}
+       \hfill
+       \begin{subfigure}[b]{0.243\textwidth}   
+           \centering 
+           %\caption{Building}
+           %\includegraphics[width=\textwidth]{figures_dataset/eoc_new_org_air.JPG}
+           \includegraphics[width=\textwidth]{figures_dataset/eoc_org_4k_air.jpg}
+       \end{subfigure}
+        \vskip\baselineskip
+       \begin{subfigure}[b]{0.243\textwidth}   
+           \centering 
+           \includegraphics[width=\textwidth]{figures_dataset/container_org_uav.jpg}
+           \caption{\texttt{Container}}
+       \end{subfigure}
+       \hfill
+       \begin{subfigure}[b]{0.243\textwidth}  
+           \centering 
+           \includegraphics[width=\textwidth]{figures_dataset/eichenau_org_uav.jpg}
+           \caption{\texttt{Urban1}}
+       \end{subfigure}
+       \hfill
+       \begin{subfigure}[b]{0.243\textwidth}   
+           \centering 
+           \includegraphics[width=\textwidth]{figures_dataset/swimmingpool_org_uav.jpg}
+           \caption{\texttt{Pool1}}
+       \end{subfigure}
+       \hfill
+       \begin{subfigure}[b]{0.243\textwidth}   
+           \centering 
+           %\includegraphics[width=\textwidth]{figures_dataset/eoc_new_org_uav.JPG}
+           \includegraphics[width=\textwidth]{figures_dataset/eoc_new_org_air.JPG}
+           \caption{\texttt{Building}}
+       \end{subfigure}
+       %\vskip\baselineskip
+       \begin{subfigure}[b]{0.243\textwidth}  
+           \centering 
+           \includegraphics[width=\textwidth]{figures_dataset/highway_org_uav.jpg}
+           \caption{\texttt{Highway}}
+       \end{subfigure}
+       \hfill
+       \begin{subfigure}[b]{0.243\textwidth}   
+           \centering 
+           \includegraphics[width=\textwidth]{figures_dataset/eichenau_org_uav2.jpg}
+           \caption{\texttt{Urban2}}
+       \end{subfigure}
+       \hfill
+       \begin{subfigure}[b]{0.243\textwidth}   
+           \centering 
+           \includegraphics[width=\textwidth]{figures_dataset/swimmingpool_org_uav2.jpg}
+           \caption{\texttt{Pool2}}
+       \end{subfigure}
+       \hfill
+       \begin{subfigure}[b]{0.243\textwidth}  
+           \centering 
+           \includegraphics[width=\textwidth]{figures_dataset/eoc_org_gmaps.jpg}
+           \caption{\texttt{Googlemaps}}
+       \end{subfigure}
+       \caption{Datasets used in this paper: Each column represents one (pre-processed) aerial reference image and two UAV target images. The UAV image in (d) should be matched to the aerial image (top right) and to a cropped part of a googlemaps image (h).}
+\label{fig:datasets} 
+\end{figure}
+In a first step of our analysis, we study the effect of different numbers of octaves and levels in the SIFT detection step, while fixing the ratio-test threshold to a commonly used value of $0.75$.
+The number of octaves is related to different image samplings, while the number of levels represent the number of scale spaces per octave and is therefore related to the amount of image blurring.
+Table \ref{tab:Octaves} lists the number of feasible correct matches from the set of remaining matches after applying the ratio-test for different values of octaves and levels. 
+Due to the low image resolutions of the downsampled UAV image ($664 \times 885$ pix) and cropped aerial image ($971 \times 665$ pix), the number of keypoint detections saturates after two octaves. 
+While increasing the number of levels per octave results in more matches surviving the ratio-test, the number of inliers stays constant at a very low number of around 20 matches.
+
+
+\begin{table}[tbp]
+\centering
+\small 
+\begin{tabular}{rlllllllll}
+\toprule
+\multicolumn{1}{r}{}    &   & \multicolumn{8}{l}{\textbf{Levels}}  \\
+\multicolumn{1}{l}{}    &   & \textbf{1} & \textbf{2} &  \textbf{3} &  \textbf{4} & \textbf{5} &  \textbf{6} &  \textbf{7} &  \textbf{8} \\
+\cmidrule(lr){3-10} 
+\footnotesize
+\multirow{5}{*}{\rotatebox[origin=c]{90}{\small \textbf{Octaves}}} & \small \textbf{1} & 12 / 50  & 15 / 61  & 15 / 64  & 17 / 74  & 17 / 84  & 11 / 91  & 17 / 78  & 14 / 91  \\
+& \small \textbf{2} & 13 / 61  & 17 / 71  & 12 / 89  & 20 / 103  & 25 / 124 & 16 / 134  & 26 / 137 & 21 / 148  \\
+& \small \textbf{3} & 13 / 63  & 17 / 76  & 13 / 93  & 22 / 108  & 26 / 131 & 17 / 142  & 27 / 148 & 22 / 153  \\
+& \small \textbf{4} & 13 / 62  & 17 / 77  & 13 / 94  & 22 / 109  & 26 / 134 & 17 / 146  & 27 / 155 & 22 / 158  \\
+& \small \textbf{5} & 13 / 62  & 17 / 77  & 13 / 93  & 22 / 110  & 26 / 136 & 17 / 148  & 27 / 157 & 22 / 159  \\
+\bottomrule
+\end{tabular}
+\caption{Analysis of SIFT performance with different octaves and levels for the \texttt{Container} dataset. Cells contain the number of correct matches (first number) from the set of remaining matches (second number) after applying the ratio-test with a fixed threshold of $0.75$. Due to the scale adaption of the UAV image the number of keypoint detections saturates after two octaves. By increasing the levels more keypoints can be detected but the ratio of inliers decreases.}
+\label{tab:Octaves}
+\end{table}
+
+According to this experimental result, we analyze different thresholds of the ratio-test in a next step while limiting the SIFT detector to three octaves and five levels.
+Like in the analysis above, we again count the number of remaining matches after the ratio-test and the number of inliers among them, as illustrated in Figure \ref{fig:Ratio}(a).
+A maximum number of around $100$ correct matches can be found when only the first nearest neighbor is considered (equivalent to a threshold of $1$). 
+Comparing this number to the total number of around $4000$ matches this is a very low ratio of inliers as can also be seen in Figure \ref{fig:Ratio}(b). 
+Increasing the impact of the ratio-test (equivalent to lower values of the threshold), a lot of correct matches are rejected due to a high similarity to other keypoint descriptors, while the ratio of outliers is decreasing at the same time.
+
+According to the results in Figure \ref{fig:Ratio}(b), the best ratio of inliers is suggested for threshold values between $0.3$ and $0.5$, but the absolute numbers of correct matches for these values is below ten and therefore not a reliable matching result.
+\begin{figure}[tbp]
+    %\centering
+       \begin{subfigure}[c]{0.3\linewidth}
+	       \centering
+			\input{tikz/SIFT_Matches.tikz} %
+			\caption{Absolute numbers of matches (blue, solid) and correct inliers (red, dashed)}
+       \end{subfigure}%
+       \hspace{3.5cm}
+       \begin{subfigure}[c]{0.3\linewidth}  
+	       \centering
+			\input{tikz/SIFT_PDF.tikz}%
+			\caption{Probability density functions for correct (dashed) and incorrect (solid) matches}
+            \label{fig:1}
+       \end{subfigure}
+       \caption{Influence of different ratio-test thresholds for the \texttt{Container} dataset. (a) Number of remaining matches after applying ratio-test (solid) and number of correct matches among them (dashed). (b) Ratio of correct (dashed) and incorrect (solid) matches.}
+       \label{fig:Ratio}
+\end{figure}
+For our further analysis we choose a ratio-test threshold of $0.75$, which is a good trade-off between rejecting most of wrong matches and keeping a relatively high ratio of inliers.
+
+Experimental results for the other datasets with these parameters are listed in Table \ref{tab:Ratio}, which confirmed the difficulty of matching this kind of image pairs.
+Particularly in automatic registration systems for online geolocalization, it is crucial that the system is able to decide whether an image pair could be registered successfully or not.
+A high and reliable number of matches between $500$ and $1000$ is therefore indispensable for a trustable decision, compared to a rather low number below $50$ like in our experiments, which could also satisfy random geometric transformations by chance. 
+
+\begin{table}[tbp]
+  \begin{center}
+  \footnotesize 
+  \begin{tabular}{@{}v{.13\linewidth}*{10}{l}@{}}
+    \toprule
+    \multicolumn{1}{@{}X}{\textbf{Scenario}} & \multicolumn{3}{X@{}}{\textbf{Image fragment size (pix)}} &  \multicolumn{3}{X@{}}{\textbf{Keypoints}} &  \multicolumn{2}{X@{}}{\textbf{Correct matches}} \\
+    \cmidrule(l){2-10}    & 
+    \multicolumn{1}{V{.1\linewidth}}{\textbf{Aerial}} & 
+    \multicolumn{1}{V{.1\linewidth}}{\textbf{UAV}} & 
+    \multicolumn{1}{V{.01\linewidth}}{} & 
+    \multicolumn{1}{V{.05\linewidth}}{\textbf{Aerial}} & 
+    \multicolumn{1}{V{.05\linewidth}}{\textbf{UAV}} & 
+    \multicolumn{1}{V{.01\linewidth}}{} & 
+    \multicolumn{1}{V{.06\linewidth}}{\textbf{Nearest}} & 
+    \multicolumn{1}{V{.07\linewidth}}{\textbf{Ratio-test}} & 
+    \multicolumn{1}{V{.09\linewidth}}{\textbf{Nearest 100}} \\ 
+    \cmidrule(){1-10}
+    %\cmidrule(r){1-1} \cmidrule(lr){2-2} \cmidrule(lr){3-3} \cmidrule(lr){4-4} \cmidrule(lr){5-5} \cmidrule(lr){6-6} \cmidrule(lr){7-7} \cmidrule(lr){8-8}
+ \texttt{Container} & $971  \times  665$ & $664 \times  885$ & &  3763 & 3682 & & 81 &  27 &  690  \\  %
+\texttt{Highway} 	& $617  \times  908$ & $571 \times  762$ & & 2768 & 2560 & & 46 &  22 &  521  \\ %
+\texttt{Urban1} 	& $1197 \times 1643$ & $871 \times 1307$ & & 10335 & 6266 & & 47 &  27 &  304  \\ %
+\texttt{Urban2} 	& $1199 \times 1603$ & $871 \times 1307$ & & 9642 & 5757 & & 293 & 176 & 1031  \\ %
+\texttt{Pool1} 		& $838  \times 1075$ & $804 \times 1071$ & & 5096 & 4202 & & 87 &  47 &  451  \\ %
+\texttt{Pool2} 		& $976  \times 1074$ & $799 \times 1065$ & & 5788 & 4047 & & 152 & 103 &  675  \\ %
+\texttt{Building} 	& $1100  \times 830$ & $687 \times 1030$ & & 4072 & 3270 & & 76 &  39 &  498  \\ %
+\texttt{Googlemaps} & $630  \times  944$ & $924 \times 1668$ & & 3411 & 5963 & & 45 &  21 &  565  \\
+  \bottomrule
+  \end{tabular}
+  \end{center}
+  \caption {Analysis of standard SIFT-matching on the proposed datasets in Figure \ref{fig:datasets}. Matching was performed on downsampled UAV images and cropped aerial images on the same image content of the UAV image. Keypoint detection was limited to $3$ octaves and $5$ levels and ratio-test threshold was set to $0.75$. Results show number of feature points detected by the SIFT-detector, correct matches considering only first nearest neighbor, after applying the ratio-test and possible matches according to 100 nearest neighbors.}
+\label{tab:Ratio}
+\end{table}
+
+
+% \begin{table}[tbp]
+% \begin{center}
+% \footnotesize 
+%  \begin{tabular}{|c|c| c| c| c| c| c| c|}
+%  \hline
+%   \multirow{2}{*}{Scenario} & \multicolumn{2}{c|}{Resolution [pix]} & \multicolumn{2}{c|}{Keypoints}& \multicolumn{3}{c|}{Correct matches}\\
+%   \cline{2-8}
+%   & aerial & UAV & aerial & UAV & nearest & ratio-test & nearest 100 \\
+%  \hline\hline
+% \texttt{Container} 	& $971  \times  665$ & $664 \times  885$ &  3763 & 3682 &  81 &  27 &  690  \\ 
+% \texttt{Highway} 	& $617  \times  908$ & $571 \times  762$ &  2768 & 2560 &  46 &  22 &  521  \\ 
+% \texttt{Urban1} 	& $1197 \times 1643$ & $871 \times 1307$ & 10335 & 6266 &  47 &  27 &  304  \\ 
+% \texttt{Urban2} 	& $1199 \times 1603$ & $871 \times 1307$ &  9642 & 5757 & 293 & 176 & 1031  \\ 
+% \texttt{Pool1} 		& $838  \times 1075$ & $804 \times 1071$ &  5096 & 4202 &  87 &  47 &  451  \\ 
+% \texttt{Pool2} 		& $976  \times 1074$ & $799 \times 1065$ &  5788 & 4047 & 152 & 103 &  675  \\ 
+% \texttt{Building} 	& $1100  \times 830$ & $687 \times 1030$ &  4072 & 3270 &  76 &  39 &  498  \\ 
+% \texttt{Googlemaps} & $630  \times  944$ & $924 \times 1668$ &  3411 & 5963 &  45 &  21 &  565  \\
+%  \hline
+% \end{tabular}
+% \end{center}
+% \caption {Analysis of standard SIFT-matching on the proposed datasets in Figure \ref{fig:datasets}. Matching was performed on downsampled UAV images and cropped aerial images on the same image content of the UAV image. Keypoint detection was limited to $3$ octaves and $5$ levels and ratio-test threshold was set to $0.75$. Results show number of feature points detected by the SIFT-detector, correct matches considering only first nearest neighbor, after applying the ratio-test and possible matches according to 100 nearest neighbors.}
+% \label{tab:Ratio}
+% \end{table}
+
+However, the number of correct matches (using the same feature points and descriptors) can be significantly increased, if multiple nearest neighbors in feature space are considered as matching candidates.
+Figure \ref{fig:kNN} shows the cumulative number of correct matches for the first $100$ nearest neighbors for the \texttt{Container} dataset. 
+The last column of Table \ref{tab:Ratio} lists the number of possible matches for the other datasets. 
+This significant increase of correct matches for all datasets indicates that many corresponding keypoints in an image pair are not described perfectly by the SIFT descriptor, but can still be found among the first nearest neighbors in feature space.    
+
+\begin{figure}[tbp]
+    \centering
+  	%\input{tikz/SIFT_kNN.tikz}%
+    \input{tikz/SIFT_kNN_new.tikz}%
+	\caption{\label{fig:1}Cumulative number of possible correct matches considering multiple nearest neighbors in the feature matching for the \texttt{Container} dataset.}
+    \label{fig:kNN}
+\end{figure}
+
+
+% Steps 4 and 5 are optional and aim at finding further correct correspondences and refine the estimation of epipolar geometry. 
+% This process can be iterated until the number of correspondences is stable. 
+% However, the guided matching works only under good initial estimation of epipolar geometry. 
+% If step 3 fails to achieve reliable correspondences and is unable to compute a correct fundamental matrix, it does not make sense to apply guided matching to find more correspondences. 
+
+
+\subsection{Influence of Rotation}\label{sec:Influence of rotation}
+As shown in the matching results above, SIFT has unsatisfactory performance for matching UAV and aerial images.
+Considering the fact that the UAV and aerial images are both almost nadir view and the difference in scale has already been eliminated, the only observable difference is that the two images are not aligned in rotation. 
+Therefore, the rotation invariance property of SIFT needs to be reconsidered and evaluated. 
+To investigate into the problem, a series of experiments were carried out to test the influence of rotation. 
+As listed in Table \ref{tab:Rotation}, we compare the standard SIFT matching on the original unaligned images (denoted by 'Std. SIFT') from Table \ref{tab:Ratio} and on the aligned image (denoted by 'Std. SIFT Rotation aligned'); besides, instead of letting SIFT assign the orientation for each keypoint, we forced the orientation of all the detected key points in the aligned images manually to be a fixed value, here it was 0$^\circ$ for aligned images (denoted by 'Fixed-orientation').
+The matching result was represented by the number of putative correspondences after ratio-test (denoted by 'Matches') and the correct matches among them (denoted by 'Inliers').
+It is worth noting that the performance of matching between rotation-aligned images using standard SIFT does not get improved; however, the number of inliers increased substantially after we fixed the orientation of the keypoints. 
+The experiment result shows that the rotation invariance of SIFT does not always work well, at least for the scenes in our datasets.
+\begin{table}[tbp]
+  \begin{center}
+  \small 
+  \begin{tabular}{@{}v{.15\linewidth}*{4}{l}@{}}
+    \toprule
+    \multicolumn{1}{@{}X}{\textbf{\small Scenario}} & \multicolumn{3}{X@{}}{\small \textbf{Inliers / Matches}} \\
+    \cmidrule(l){2-4}    & 
+    \multicolumn{1}{V{.15\linewidth}}{\textbf{Std. SIFT}} & 
+    \multicolumn{1}{V{.15\linewidth}}{\textbf{Std. SIFT \\ Rotation aligned}} & 
+    \multicolumn{1}{V{.15\linewidth}}{\textbf{SIFT \\ Rotation aligned \\ Fixed-orientation}} \\
+    \cmidrule(){1-4}
+    %   
+    \texttt{Container} & 27 / 320 &  22 / 349 &   30 / 306 \\   %   
+    \texttt{Highway} &  22 / 204 &   26 / 263 &   52 / 277 \\   %      
+    \texttt{Urban1} &  27 / 471  &  17 / 496 &   43 / 478 \\   %     
+    \texttt{Urban2} &  103 / 635 &  179 / 677 & 267 / 734 \\   % 
+    \texttt{Pool1} &  47 / 391 &     65 / 446 & 92 / 404 \\    % 
+    \texttt{Pool2} & 103 / 635 &    179 / 677 & 267 / 734 \\   % 
+    \texttt{Building} & 39 / 349 & 27 / 381 & 51 / 396 \\    % 
+    \texttt{Googlemaps} & 21 / 535  & 21 / 509 & 35 / 394 \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+  \caption {Analysis of the influence of image-rotation on matching performace. Inliers and matches for downsampled UAV images and cropped aerial images, rotation-aligned UAV images and rotation-aligned UAV images with fixed orientation in the SIFT-detector.}
+\label{tab:Rotation}
+\end{table}
+
+% \begin{table}[tbp]
+% \begin{center}
+% \footnotesize 
+%  \begin{tabular}{|c|c| c| c|  }
+%  \hline
+%   \multirow{4}{*}{Scenario} & \multicolumn{3}{c|}{Inliers / Matches}\\ 
+%   \cline{2-4} 
+%   & \multirow{3}{*}{Std. SIFT}& \multirow{2}{*}{Std. SIFT} & SIFT  \\
+%   & &\multirow{2}{*}{Rotation aligned} & Rotation aligned  \\
+%   & & & Fixed-orientation \\
+%   \hline\hline
+% \texttt{Container}  &  27 / 320  &  22 / 349 &  30 / 306 \\ \hline
+% \texttt{Highway}    &  22 / 204  &  26 / 263 &  52 / 277 \\ \hline
+% \texttt{Urban1}     &  27 / 471  &  17 / 496 &  43 / 478 \\ \hline
+% \texttt{Urban2}     & 176 / 783  & 165 / 759 & 229 / 829 \\ \hline
+% \texttt{Pool1}      &  47 / 391  &  65 / 446 &  92 / 404 \\ \hline
+% \texttt{Pool2}      & 103 / 635  & 179 / 677 & 267 / 734 \\ \hline
+% \texttt{Building}   &  39 / 349  &  27 / 381 &  51 / 396 \\ \hline
+% \texttt{Googlemaps} &  21 / 535  &  21 / 509 &  35 / 394 \\ 
+%  \hline 
+% \end{tabular}  
+% \end{center}
+% \caption {Analysis of the influence of image-rotation on matching performace. Inliers and matches for downsampled UAV images and cropped aerial images, rotation-aligned UAV images and rotation-aligned UAV images with fixed orientation in the SIFT-detector.}
+% \label{tab:Rotation}
+% \end{table}
+
+For further investigation into the influence of rotation, we also made a comparison with the ASIFT method, as Table \ref{tab:Asift} shows. 
+First, we compared the fixed-orientation SIFT with standard ASIFT on aligned images.
+As we achieved fewer correct matches for a tilt value of 4 at even higher computation cost, we, inspired by this finding, also fixed the orientation in ASIFT (denoted by 'Fixed-orientation') in the same way, and the matching performance get improved significantly.
+Comparing the results in column 2 and column 4, it can be seen that when the orientation is fixed, SIFT results in almost equivalent inliers than ASIFT, however, for a robust matching the number of inliers is still far from enough.
+
+\begin{table}[tbp]
+  \begin{center}
+  \small 
+  \begin{tabular}{@{}v{.15\linewidth}*{4}{l}@{}}
+    \toprule
+    \multicolumn{1}{@{}X}{\small \textbf{Scenario}} & \multicolumn{3}{X@{}}{\small \textbf{Inliers / Matches}} \\
+    \cmidrule(l){2-4}    & 
+    \multicolumn{1}{V{.15\linewidth}}{\textbf{SIFT \\ Rotation aligned \\ Fixed-orientation}} & 
+    \multicolumn{1}{V{.15\linewidth}}{\textbf{Std. ASIFT}} & 
+    \multicolumn{1}{V{.15\linewidth}}{\textbf{ASIFT \\ Rotation aligned \\Fixed-orientation}} \\
+    \cmidrule(){1-4}
+  %   
+    \texttt{Container} & 30 / 306 & 25  /  281 &  46 / 283 \\   %   
+    \texttt{Highway} & 52 / 227 &  56  /  249 &  70 / 237 \\  %      
+    \texttt{Urban1} &  43 / 478 &  46  /  512 &  61 / 508 \\ %     
+    \texttt{Urban2} &  229 / 829 & 254 / 1069 &  281 / 994 \\   % 
+    \texttt{Pool1} &  92 / 404 &  73  /  346 &  109 / 404 \\     % 
+    \texttt{Pool2} & 267 / 734 &  255 /  600  &  375 / 620 \\     % 
+    \texttt{Building} & 51 / 394 &  45 /  382  &   78 / 424 \\    % 
+    \texttt{Googlemaps} &  35 / 394  & 42 /  330 &  47 / 430 \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+  \caption {Comparison with ASIFT. Inliers and matches for pre-aligned images using standard SIFT with fixed orientation, ASIFT and pre-aligned images on ASIFT with fixed orientation.}
+\label{tab:Asift}
+\end{table}
+
+
+% \begin{table}[tbp]
+% \begin{center}
+% \footnotesize 
+%  \begin{tabular}{|c|c| c| c|}
+%  \hline
+%   \multirow{4}{*}{scenario} & \multicolumn{3}{c|}{Inliers / Matches}\\ 
+%   \cline{2-4} 
+%   & SIFT & \multirow{3}{*}{Std.ASIFT} & \multirow{2}{*}{ASIFT} \\
+%   & Rotation aligned &  & \multirow{2}{*}{Fixed-orientation} \\
+%   & Fixed-orientation & &  \\
+%   \hline \hline 
+% \texttt{Container}  &  30 / 306 &  25  /  281  &   46 / 283  \\ \hline
+% \texttt{Highway}    &  52 / 227 &  56  /  249  &   70 / 237  \\ \hline
+% \texttt{Urban1}     &  43 / 478 &  46  /  512  &   61 / 508  \\ \hline
+% \texttt{Urban2}     & 229 / 829 &  254 / 1069  &  281 / 994  \\ \hline
+% \texttt{Pool1}      &  92 / 404 &  73  /  346  &  109 / 404  \\ \hline
+% \texttt{Pool2}      & 267 / 734 &  255 /  600  &  375 / 620  \\ \hline
+% \texttt{Building}   &  51 / 394 &   45 /  382  &   78 / 424  \\ \hline
+% \texttt{Googlemaps} &  35 / 394 &   42 /  330  &   47 / 430  \\ 
+%  \hline 
+% \end{tabular}  
+% \end{center}
+% \caption {Comparison with ASIFT. Inliers and matches for pre-aligned images using standard SIFT with fixed orientation, ASIFT and pre-aligned images on ASIFT with fixed orientation.}
+% \label{tab:Asift}
+% \end{table}
+
+
+Based on the above findings, we summarize that the challenges of matching UAV imagery and airborne imagery stem mainly from the following aspects: inadequate matching candidates, ambiguous keypoint orientations and misuse of the ratio-test. To be more specific:
+
+\begin{itemize}
+\itemsep=0.03cm
+\item The rotation invariance of SIFT does not work well when the images have large differences in scales and viewpoints. In standard SIFT, the dominant orientation is detected automatically. Instead, if we fix the orientations of SIFT keypoints, the number of correct matches increases significantly.
+\item When the image has repeated patterns, the local descriptors of the repeated structure can be so similar that the distance ratio between the nearest and second nearest neighbor is no more distinctive. As an important step in the standard matching pipeline, the ratio-test actually discards many correct matches and the remaining correspondences are not reliable. In contrast, considering multiple nearest neighbors as matching hypotheses can help to increase the matching performance enormously.
+\end{itemize}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Proposed Image Matching Method}
+\label{sec:method}
+According to the reasons of the matching failure presented in Section \ref{sec:Analysis}, the new matching approach is designed to eliminate each of the exposed bottlenecks.
+A new feature detection scheme increases the number of matchable keypoints which is necessary for a reliable matching result.
+To avoid loosing many correct matches which are not nearest neighbor in feature space or which are rejected by the ratio-test, we introduce a one-to-many matching scheme. 
+To extract correct matches among them, a direct method using histogram voting is performed instead of the commonly used RANSAC scheme.
+An extension of this method can also handle unknown image rotations.
+In the end, the detected matches are used to estimate camera poses of the UAV images in the coordinate system of the reference images. 
+
+\subsection{Prerequisites}
+The proposed method assumes that the scale difference between both images can be estimated and mostly eliminated in advance.
+This requirement can be generally fulfilled, as accurate positional information of aerial images is always available and UAV images are tagged with both GNSS and barometric altitude information.
+One of both sensors should deliver reliable data in any case.
+
+Secondly, a pre-alignment with respect to the image rotation can be achieved using the on-board compass of the UAV.
+The next sections assume that a rough pre-alignment of the image pairs is feasible, but in case of no or only imprecise image heading information, Section \ref{sec:Rot} presents an extension of the proposed method which allows to recover an unknown image rotation.
+
+\subsection{Dense Feature Extraction}\label{sec:FeatExt}
+The essential prerequisites of robust matching are sufficient and uniformly distributed features whose density should reflect the information content of the image.
+According to the results in Table \ref{tab:Rotation} and Table \ref{tab:Asift}, established keypoint detectors, such as in SIFT, do not always find a sufficient number of matchable features.
+To ensure a large number of inliers, a dense detection scheme is desired, but instead of using all pixels as potential feature points, only keypoints should be considered which are located along strong image gradients.
+This does not only reduce computational time but also rejects hardly matchable feature points at homogeneous areas with weak descriptors.
+
+In view of the fact that image segmentation using SLIC (Simple Linear Iterative Clustering) \cite{achanta2012slic} can efficiently generate compact and highly uniform superpixels, whose boundaries mostly define strong variations in the intensities of the local neighborhood, like edges and corners, we therefore adopt all the pixels at the boundaries of superpixels as feature points.
+In practice, the number of desired superpixels can be specified according to the need for feature density and compactness.
+Since the relative scale difference of both images is known beforehand, the number and compactness of superpixels in both images are similar and therefore ensures the extraction of identical object boundaries.
+Figure \ref{fig:slic} highlights the feature points of a UAV and aerial image, namely all the pixels at the boundaries of superpixels, after removing those feature points located at homogeneous areas.
+
+
+\begin{figure}[tbp]
+    \centering
+       \begin{subfigure}[b]{0.4\columnwidth}
+           \centering
+           \includegraphics[height=0.2\textheight]{figures_4/keypoints_uav}
+           \caption[]{UAV image}%
+       \end{subfigure}
+       %
+       \begin{subfigure}[b]{0.4821\columnwidth}  
+           \centering 
+           \includegraphics[height=0.2\textheight]{figures_4/keypoints_air}
+           \caption[]{Aerial Image}%
+       \end{subfigure}
+       \caption{Feature points highlighted in red, namely all the pixels at the boundaries of superpixels, after removing those feature points located at homogeneous areas for (a) the pre-aligned UAV image and (b) the aerial image of the \texttt{Container} dataset with $1000$ SLIC superpixels.}
+        \label{fig:slic}
+\end{figure}
+
+% \begin{figure}[tbp]
+% \begin{center}
+% 	\includegraphics[width=0.5\columnwidth]{figures_4/slic_example.jpg}
+% 	\caption{Feature points highlighted in red, namely all the pixels at the boundaries of superpixels, after removing those feature points located at homogeneous areas.}
+% 	\label{fig:slic}
+% \end{center}
+% \end{figure}
+
+Afterwards a SIFT-descriptor for each detected feature point is computed. 
+Since the UAV image is already aligned with the reference image, the scale space and feature orientation of SIFT-descriptors should be identically assigned for both images. 
+
+
+\subsection{One-to-Many Feature Matching}\label{sec:Match}
+In this phase, a feature descriptor in one image is matched with all other features in the other image using the euclidean distance calculation. 
+In standard SIFT, only the first and second nearest neighbors are taken into account, so that many correct matches are actually discarded as presented in Table \ref{tab:Ratio}. 
+An example of  ambiguous feature matching is demonstrated in Figure \ref{fig:onetomany}. 
+The correct feature point (left) would mainly be discarded for two reasons: first, the correct match may not be the first nearest neighbor in feature space; second, it may not pass the ratio-test due to the high similarity of the local descriptors.  
+
+\begin{figure}[tbp]
+    \centering
+       \begin{subfigure}[b]{0.25\columnwidth}
+           \centering
+           \includegraphics[width=\textwidth]{figures_4/gt_match_repetetion_uav.png}
+           \caption{Feature point in the UAV image}%
+           {{\small }}
+           %\centerline{(a) UAV feature point}\medskip
+           \label{fig:ontomany_a}
+       \end{subfigure}
+	   \hspace{0.075\columnwidth}
+       \begin{subfigure}[b]{0.4\columnwidth}  
+           \centering 
+           \includegraphics[width=\textwidth]{figures_4/gt_match_repetetion_air.png}
+           \caption{Corresponding feature points in the aerial image}%
+           {{\small }}
+           %\centerline{(b) Corresponding aerial feature points}\medskip
+           \label{fig:ontomany_b}
+       \end{subfigure}
+       \caption{Challenge of ambiguous feature matching. Feature points in the aerial image with the closest descriptor distances in image (b) to a feature point at the corner of a container in the UAV image (a). The correct match often can be found among a set of multiple nearest neighbors. These ambiguities need to be solved in order to extract the correct match.}
+       \label{fig:onetomany}
+\end{figure}
+To solve this problem, we propose a one-to-many matching scheme by taking the k-nearest neighbors as matching candidates to ensure that correct matches can be even found for corresponding keypoints which do not show nearest descriptors distances. 
+Besides, the approximate nearest neighbor method (ANN) is applied to avoid the exhaustive search and to speed up the matching process.
+Although the idea of using a one-to-many matching scheme is not new, the next section proposes a new approach how to extract the correct matches among them. 
+
+\subsection{Geometric Match Verification with Histogram Voting}
+\label{sec:Filt}
+It is pointed out in Section \ref{sec:Analysis} that the commonly used ratio-test in SIFT does not effectively determine whether a feature point is a correct match. 
+As a substitute, we use pixel-distances as a global geometric constraint to verify the matching hypotheses. 
+The superpixel-based feature point extraction and one-to-many matching strategy result in a plethora of putative matches, which ensures a sufficient number of correct matches but also inevitably contains a massive number of mismatches.
+Postulating that the UAV and reference image both contain the same planar scene and the differences in their scales and rotations have already been eliminated, the transformation between the two aligned images can be simply approximated as a 2D-translation. 
+Particularly, for each keypoint $i$, whose image coordinates are $(x_{u}^i, y_{u}^i)$ in the UAV image and $(x_{r}^i, y_{r}^i)$ in the reference image, and for each of its $k$ matching hypothesis $j$ ($j=1:k$), whose image coordinates are $(x_{r}^j, y_{r}^j)$ in the reference image, we calculate their coordinate differences $\Delta x^{i,j}$ and $\Delta y^{i,j}$ by $\Delta x^{i,j} = x_{u}^i - x_{r}^{i,j} $ and $ \Delta y^{i,j} = y_{u}^i - y_{r}^{i,j} $.
+Correct matches are expected to satisfy the conditions $ | T_x - \Delta x^{i,j} | \le R \wedge | T_y - \Delta y^{i,j} | \le R $, where $R$ is a threshold related with the scene depth and $T_x$ and $T_y$ are the parameters of the unknown 2D translation. 
+We can recover this translation by a simple histogram voting scheme. 
+After computing $\Delta x^{i,j}$ and $\Delta y^{i,j}$ for all putative matches, distinctive peaks $T_x$ and $T_y$ in the both histograms are extracted.
+
+Figure \ref{fig:hyps} presents an example for this histogram voting regarding the \texttt{Container} scenario. 
+While distances of wrong matches are randomly distributed, those of geometrically correct matches concentrate on or aggregate around a common value ($T_x$,$T_y$), thus shaping a distinct peak in the histogram. 
+To allow for minor changes of image scene depth, we determine the matches located at close range to ($T_x$,$T_y$) as possibly correct matches, the distance threshold is denoted by $R$. 
+The value of $R$ is related to the change of scene depth as well as the accuracy of pre-alignment. 
+A larger threshold $R$ can compensate for these impacts and result in more matches, on the other hand, more outliers would also be introduced into the raw matches. 
+
+\begin{figure}[tbp]
+    \centering
+       \begin{subfigure}[b]{0.42\linewidth}
+	       \centering
+			\input{tikz/hist_x.tikz}%
+			\caption{Row direction}
+       \end{subfigure}
+       \hspace{0.07\columnwidth}
+       \begin{subfigure}[b]{0.42\linewidth}  
+	       \centering
+			\input{tikz/hist_y.tikz}%
+			\caption{Column direction}
+       \end{subfigure}
+       \caption{Geometric match verification of the \texttt{Container} scenario with histogram voting. Distribution of pixel distances for all putative matches according to the one-to-many matching in (a) row- and (b) column- direction. Distinct peaks represent unknown 2D-translation.}
+       \label{fig:hyps}
+\end{figure}
+
+
+\subsection{Eliminating Differences in Image Rotation}\label{sec:Rot}
+
+The scale difference between the UAV image and the reference image can be derived using either the on-board GNSS information or the barometric altitude sensor.
+In contrast, precise orientation-adaption fails for many UAVs due to inaccurate heading information provided by the low quality IMUs. 
+Our assumption of correct matches follow a simple 2D translation fails in case of unaligned images. 
+However, we can estimate the unknown image rotation by adapting the proposed matching approach with a rotation search scheme.
+Although Section \ref{sec:Influence of rotation} shows, that fixing the orientation of the feature points in the SIFT descriptors results in a better matching performance if the images are pre-aligned, a sufficient number of correct matches can still be found for unaligned images with the keypoint orientation estimation of SIFT when using a denser feature detection like the one presented in Section \ref{sec:FeatExt}.
+
+After generating a set of putative one-to-many matches for unaligned images, the unknown image rotation is obtained by first dividing the rotation $\psi$ equally into discrete rotation values $\psi^a = \left[ -180, 180 \right[ \SI{}{\deg}$.
+For each rotation $\psi^a$ the feature points of the UAV images $pt_{u}^i = (x_{u}^i , y_{u}^i , 1)^T$ are rotated around the image center $pt_{u,rot}^{i,a} = M(p,\psi^a) \cdot pt_{u}^i$ with a transformation matrix $M(p,\psi^a) = \left[ T(p) R(\psi^a) T(-p) \right]$, where $T(p)$ is a translation matrix with the coordinates of the image center $p$ and $R$ a rotation matrix with rotation angle $\psi^a$. 
+Pixel distances are calculated according to $\Delta x_{rot}^{i,j,a} = x_{u,rot}^{i,a} - x_{r}^{i,j} $ and $ \Delta y_{rot}^{i,j,a} = y_{u,rot}^{i,a} - y_{r}^{i,j}$ and histogram voting from Section \ref{sec:Filt} is performed for each rotation.
+The maximum number of raw matches satisfying the threshold $T_{x}^a$ and $T_{y}^a$ is kept for all rotation values $\psi^a$. 
+Figure \ref{fig:img_rot} shows the number of raw matches for different image rotations according to the \texttt{Container} dataset.
+The distinct peak at $\SI{-104}{\deg}$ represents the unknown image rotation. 
+
+This method may be used for a full $\SI{360}{\deg}$ search, however, the search range can be reduced in case of available inaccurate rotations from the on-board IMU.
+%Ideally, this method works for inaccurate image rotations provided by the IMU, but it may be used for a full 360$^\circ$ search as well.
+After recovering the unknown image rotation, further matches can be determined with fixed orientations according to the previous sections.
+
+\begin{figure}[tbp]
+    \centering
+    \input{tikz/rotation.tikz}%
+	\caption{Recovering the unknown image rotation in case of unavailable or inaccurate UAV IMU data. Extending proposed method by transforming UAV feature points with multiple rotation values before the histogram voting step. Figure shows the rotation histogram for the \texttt{Container} dataset. Maximum number of raw matches represents unknown image rotation.}
+    \label{fig:img_rot}
+\end{figure}
+
+\subsection{Match Refinement}
+After the geometric verification of the one-to-many matches, it is likely for some keypoints that they share multiple adjacent feature points in the other image as geometric correct matches.
+This is caused by the dense feature point extraction, which generates dense feature points especially along strong image edges. 
+The distance threshold $R$ allows multiple geometric correct matches for adjacent feature points for which the distance to $T_x$ and $T_y$ is below $R$.
+Figure \ref{fig:refine} illustrates these local ambiguities of the feature matches.
+One feature point in the UAV image in Figure \ref{fig:refine}(a) corresponds to multiple geometrical correct matches in the aerial image in Figure \ref{fig:refine}(b) .
+Even a successive RANSAC filtering step according to geometrical transformations will not truly solve these ambiguities, if Sampson distances or transfer errors of neighboring matches are below the filtering threshold.
+In order to ensure geometrical correct and unique one-to-one matches, a refinement step is applied for all geometrical correct matches by eliminating the ambiguities and optimizing the location of the feature points. 
+The superpixel segmentation cannot guarantee exact locations of corresponding pixels in both images. 
+The refinement consists of a NCC matching of a template in the local neighborhood of the UAV feature point (yellow rectangle in Figure \ref{fig:refine}(a)).
+For all corresponding matching hypotheses (yellow dots in Figure \ref{fig:refine}(b)), the corresponding patch is searched in a local search window around the feature points (red rectangle in Figure \ref{fig:refine}(b)).
+The size of the search window for all aerial feature points can be set to the threshold $R$ of the geometric verification. 
+The NCC optimizes all matching hypotheses to the correct location, illustrated by the red dot in Figure \ref{fig:refine}(c). 
+This method eliminates duplicate matches and refines feature point locations for inaccurate keypoints in a local neighborhood of the initial keypoints. 
+These raw matches can now be used to estimate the fundamental matrix or homography in combination with RANSAC methods and to reject remaining outliers satisfying the geometric constraint. 
+After computing the fundamental matrix, a guided matching method, as presented in Section 3, can be applied to find more matches if the threshold was chosen too small.
+\begin{figure}[tbp]
+    \centering
+       \begin{subfigure}[tbp]{0.263\columnwidth}
+           \centering
+           \includegraphics[width=\textwidth]{figures_4/refine_uav.png}
+           \caption[]{UAV feature point and template size.}%
+           {{\small }}
+           \label{fig:refine_a}
+       \end{subfigure}
+       \hfill
+       \begin{subfigure}[tbp]{0.35\columnwidth}  
+           \centering 
+           \includegraphics[width=\textwidth]{figures_4/refine_air_geom.png}
+           \caption[]{Aerial geometric inliers and size of the search window.}%
+           {{\small }}    
+           \label{fig:refine_b}
+       \end{subfigure}
+       \hfill
+       \begin{subfigure}[tbp]{0.35\columnwidth}  
+           \centering 
+           \includegraphics[width=\textwidth]{figures_4/refine_air_correct.png}
+           \caption[]{Refined aerial match (red) as shared optimized pixel location.}%
+           {{\small }}   
+           \label{fig:refine_c}
+       \end{subfigure}
+       \caption{Refinement and duplicate elimination of geometric correct matches. (a) One feature point in the UAV image (yellow dot) and its template size (rectangle). (b) Corresponding geometric matches in the aerial image and search window for one match (red rectangle). (c) Refinement of all  feature matches to the correct matching location (red dot).}
+       \label{fig:refine}
+\end{figure}
+
+\subsection{Geo-registration of UAV Images}
+\label{ssec:registration}
+%With the large number of matches generated by the proposed matching method, camera poses can be estimated by a global bundle adjustment.
+As the UAV image and the reference image have overlapping areas, one 3D point in the object space could be visible both in the reference image and the UAV image. Such 3D points can be used as reference 3D points for geo-registration of UAV images. The prerequisite of the geo-registration is available georeferenced aerial image together with its heightmap, or one orthorectified mosaic with a high resolution DSM. 
+
+\begin{itemize}
+\itemsep=0.03cm
+\item Match a UAV image $U$ with the reference image $R$ using the proposed matching method. Assume a feature point $(x_r,y_r)$ in the reference image is matched to feature point $(x_u,y_u)$ in the UAV images, this matching pair correspond to a 3D point $P(X,Y,Z)$ in the object space.
+\item If image $R$ is an individual georeferenced aerial or satellite image, we assume its height map is available, which can be generated in the process of dense matching with neighboring images \cite{d2011semiglobal}. The height $Z$ can be looked up in the height map and the planar coordinates $X$ and $Y$ can be calculated using the orientation parameters of $R$. If image $R$ is an aerial orthophoto which is generated by an orthographic projection of the aerial image mosaic onto a high resolution DSM, the planar coordinates $(X,Y)$ are namely the corresponding georeferenced coordinates of the pixel $(x_r,y_r)$ in the orthophoto, and $Z$ is namely the corresponding height at $(X,Y)$ of the DSM. 
+\item As the proposed matching method generates thousands of matches and each match results in a 3D point, those points can be used as reference 3D points to transform the UAV image to the same global coordinate system of the reference image. If there are UAV images sequences, a bundle adjustment can be performed to improve the global geo-registration accuracy. 
+\end{itemize}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Experiments}
+\label{sec:experiments}
+In order to verify the robustness and reliability of the proposed matching method, we compare the performance of our method with standard SIFT on different datasets. 
+Furthermore, the generated matches are used for geo-registration and 3D reconstruction of the UAV images. 
+Qualitative and quantitative analyses are presented to validate the accuracy of geo-registration, and on this basis, photogrammetric 3D products, such as orthophots, DSMs and merged points clouds are discussed.
+
+\subsection{Data Acquisition}
+\label{ssec:data}
+Experiments were carried out based on offline flight data of four datasets:  \texttt{Eichenau}, \texttt{Germering}, \texttt{EOC} and \texttt{WV2}. 
+It is worth noting that for datasets \texttt{Eichenau}, \texttt{Germering} and \texttt{EOC}, which contains 72, 58 and 11 UAV images respectively, the whole UAV sequences were matched in an automatic manner.
+Showing the results for all image pairs is beyond the scope of this paper, so we focused on the same image pairs which were already introduced in Section 3.
+The \texttt{Eichenau} dataset contains two scenarios: \texttt{Urban1} and \texttt{Urban2}.
+The UAV images were acquired with a Sony Nex-7 camera simultaneously with the reference aerial images on November $2^{nd}$, 2015. 
+For both scenarios, we matched UAV images not only to aerial images but also to aerial orthophotos, which are generated by an orthographic projection onto a high resolution DSM \cite{hirschmuller2008stereo,d2011semiglobal}.
+The \texttt{Germering} dataset is comprised of four different scenarios: \texttt{Container}, \texttt{Highway}, \texttt{Pool1} and \texttt{Pool2}.
+The reference aerial images of this dataset were captured on June $17^{th}$, 2014, whereas the UAV images were captured with a slight time delay on July $11^{th}$, 2014 with a GoPro Hero 3+ Black camera.
+The aerial images in the \texttt{EOC} dataset were acquired on June $16^{th}$, 2014 and the UAV images were captured on November $12^{th}$, 2014 with a Sony Nex-7 camera.
+In \texttt{EOC} dataset, all aerial images are almost nadir whereas the UAV images have both nadir views of the building roof and oblique views of the building fa\c{c}ades. Only the nadir-view UAV images are matched with the aerial images, and the generated GCPs are used to geo-register the whole UAV image blocks including both nadir and oblique images. In addition, the nadir UAV images are also matched with a screenshot of Google Maps.
+In the \texttt{WV2} dataset \cite{Koch_2016_CVPR_Workshops}, we match an aerial image from the \texttt{EOC} dataset with a WorldView-2 RGB satellite image of the year 2010 to validate the generalization ability of the proposed method and its robustness against large temporal changes.
+Besides, the datasets \texttt{Eichenau}, \texttt{Germering} and \texttt{EOC} are not significantly affected by temporal changes, as the vegetation periods are the same (except in \texttt{EOC}) and the appearances of buildings has not changed.
+All the aerial images were captured by a Canon EOS-1DX camera mounted on the DLR 4K sensor system \cite{kurz2014performance}, which consists of two cameras with 15$^\circ$ sidewards looking angle and a FOV of 75$^\circ$ across. 
+In data pre-processing, an orthographic projection of the aerial imagery was performed to generate nadir-view images. 
+Figure \ref{fig:datasets} and Figure \ref{fig:datasets_2} illustrate all datasets used in the experiments, where the first row shows the reference images (pre-processed nadir-view aerial images and satellite image), and the other two rows are the corresponding target images (UAV and aerial images) to be matched. 
+Detailed characteristics of the datasets are listed in Table \ref{tab:dataset}.
+%and the camera poses of the aerial and UAV images are illustrated in Figure \ref{fig:campos}.
+ 
+\begin{table}[tbp]
+  \begin{center}
+  \footnotesize 
+  \begin{tabular}{@{}v{.09\linewidth}*{9}{l}@{}}
+    \toprule
+    \multicolumn{1}{@{}X}{\textbf{Dataset}} & \multicolumn{4}{X@{}}{\textbf{Reference Image}} & \multicolumn{4}{X@{}}{\textbf{Target Image}} \\
+    \cmidrule(l){2-9}    & 
+    \multicolumn{1}{V{.08\linewidth}}{\textbf{Type / \\ Date}} & 
+    \multicolumn{1}{V{.1\linewidth}}{\textbf{Resolution \\ (pix)}} & 
+    \multicolumn{1}{V{.07\linewidth}}{\textbf{Height (m)}} & 
+    \multicolumn{1}{V{.05\linewidth}}{\textbf{GSD (cm)}} & 
+    \multicolumn{1}{V{.08\linewidth}}{\textbf{Type / \\ Date}} & 
+    \multicolumn{1}{V{.1\linewidth}}{\textbf{Resolution \\ (pix)}} & 
+    \multicolumn{1}{V{.07\linewidth}}{\textbf{Height (m)}} & 
+    \multicolumn{1}{V{.05\linewidth}}{\textbf{GSD (cm)}} \\
+    \cmidrule(){1-9}
+    \texttt{Eichenau}  & AO 11/2015 & $9206 \times 7357$ & 600 & 20  & UI 11/2015   & $573  \times 794$ & 100   & 1.8     \\ %
+    \texttt{Germering} & AI 06/2014 & $5184 \times 3902$ & 700 & 9.4 & UI 07/2014   & $823  \times 996$ & 100   & 2       \\ %
+    \texttt{EOC}       & AI 06/2014 & $5184 \times 3902$ & 340 & 4.6 & UI 11/2014   & $1106 \times 807$ & 25-40 & 0.5-0.8 \\ %
+    \texttt{WV2}       & SI 2010    & $5292 \times 6410$ & 770, 000  & 46 & AI 2015 & $497  \times 332$ & 350   & 4.4	  \\
+  \bottomrule
+  \end{tabular}
+  \end{center}
+  \caption {Characteristics of the datasets used in the experiment. Target images are pre-aligned towards the reference image using GNSS/IMU data. AI: aerial imagery; AO: aerial orthophoto; SI: satellite imagery; UI: UAV imagery.}
+\label{tab:dataset}
+\end{table}
+
+\begin{figure}[tbp]
+    \centering
+       \begin{subfigure}[b]{0.3\textwidth}
+           \centering
+           \includegraphics[width=\textwidth]{figures_dataset/wv2_sat_with_box_rot.png}
+       \end{subfigure}
+       \hfill
+       \begin{subfigure}[b]{0.3\textwidth}  
+           \centering 
+           \includegraphics[width=\textwidth]{figures_dataset/eichenau_air_with_boxes.png}
+          % \includegraphics[width=\textwidth]{figures_dataset/eichenau_4k_ortho.png}
+       \end{subfigure}
+       \hfill
+       \begin{subfigure}[b]{0.3\textwidth}
+           \centering
+           \includegraphics[width=\textwidth]{figures_dataset/eoc_new_org_air.JPG}
+       \end{subfigure}
+       \vskip\baselineskip
+       \begin{subfigure}[b]{0.3\textwidth}  
+           \centering 
+           \includegraphics[width=\textwidth]{figures_dataset/building_air.jpg}
+           \caption{\texttt{WV2}}
+       \end{subfigure}
+       \hfill
+       \begin{subfigure}[b]{0.3\textwidth}   
+           \centering 
+           \includegraphics[width=\textwidth]{figures_dataset/eichenau_org_uav.jpg}
+           \caption{\texttt{Eichenau}}
+       \end{subfigure}
+       \hfill
+       \begin{subfigure}[b]{0.3\textwidth}
+           \centering
+           \includegraphics[width=\textwidth]{figures_dataset/eoc_new_org_uav.JPG}
+           \caption{\texttt{EOC}}
+       \end{subfigure}
+       \caption{Additional datasets for the experiment. Top: reference images. Bottom: target images. Overlapping areas are highlighted by yellow rectangles in the reference images.}  
+       \label{fig:datasets_2} 
+\end{figure}
+
+
+
+
+% \begin{table}[tbp]
+% \begin{center}
+% \footnotesize 
+%  \begin{tabular}{|c|c|c|c| c| c| c| c| c|}
+%  \hline
+%   \multirow{2}{*}{Dataset} & \multicolumn{4}{c|}{Reference image}& \multicolumn{4}{c|}{Target image}\\
+%   \cline{2-9}
+%   & Type/Date & Resolution & height (m) & GSD (cm) & Type/Date &  Resolution & height (m) & GSD (cm) \\ \hline
+%  \texttt{Eichenau} & AO 11/2015 & $9206 \times 7357$ & 600  & 20 & UI 11/2015 & $573 \times 794$ & 100 & 1.8  \\ \hline
+% \texttt{Germering} & AI 06/2014 & $5184 \times 3902$ & 700 & 9.4 & UI 07/2014 & $823 \times 996$  & 100 & 2  \\ \hline
+% \texttt{EOC} & AI 06/2014  & $5184 \times 3902$ & 340 & 4.6 & UI 11/2014 & $1106 \times 807$ & 25-40 &  0.5-0.8 	\\ \hline
+% \texttt{WV2} & SI 2010 &  $5292 \times 6410$ & 770, 000  & 46 & AI 2015 & $497 \times 332$ & 350  &  4.4	\\ \hline
+% \end{tabular}
+% \end{center}
+% \caption {Characteristics of the datasets used in the experiment. Target images are pre-aligned towards the reference image using GNSS/IMU data. AI: aerial imagery; AO: aerial orthophoto; SI: satellite imagery; UI: UAV imagery.}
+% \label{tab:dataset}
+% \end{table}
+
+\subsection{Performance Test of Matching UAV Images with a Reference Image}
+\label{ssec:matching}
+In order to validate the robustness and accuracy of the proposed method, we use the same image pairs presented in Section \ref{sec:Analysis}, where the standard SIFT performed poorly in most of the cases. Different from the results in Table \ref{tab:Ratio}, the matching is now performed with original aerial images other than the cropped images. As can be seen in Figure \ref{fig:datasets}, only a small portion of the aerial images is pictured in the UAV images. %Thus, it is also tested if the geometric constraints of our method also work in the presence of 
+Thus, it is also tested if the matching benefits from our geometric constraints in the presence of large searching areas.
+
+%, captured under different conditions. These image pairs differ in various acquisition altitudes, lighting conditions, contents and cameras. 
+All image pairs are provided with rough information of positions and orientations from GNSS and IMU so that the images could be pre-aligned beforehand.
+Then the target images and the reference images were matched with the proposed matching method and standard SIFT. 
+Specifically, 750 superpixels were segmented from the UAV images, the threshold for the feature matching-distance was set to $0.2$ as a trade-off between discarding apparent outliers and retaining enough matching hypotheses.
+50 nearest neighbors were selected as matching candidates for the one-to-many matching and the distance threshold $R$ for the geometric verification was set to 12 pixels.
+As for matching using SIFT, the threshold of ratio-test was set to 0.75.
+
+In order to evaluate the matching accuracy, we created ground-truths of feature point correspondences for each dataset using manually selected and automatically detected matching correspondences. 
+%The accuracy of matching was then evaluated by the mean transfer error and the mean Sampson distance of all the raw matches (the transfer error refers to the Euclidian distance between a point's true correspondence and the point mapped by the homography matrix $H$, which is estimated from matching correspondences; the Sampson error measures the distance between a point to the corresponding epipolar line.) 
+The quantitative results using standard SIFT and our proposed method are summarized in Tables \ref{tab:Result_sift} and \ref{tab:Result}, where Error (H) denotes the mean transfer error (the Euclidean distance between a point's true correspondence and the point mapped by the homography matrix $H$, which is estimated from matching correspondences) and Error (F) denotes the mean Sampson distance (the distance between a point to the corresponding epipolar line). 
+Standard SIFT failed for almost all scenarios while the proposed method found abundant matches with much smaller errors. 
+
+\begin{table}[t]
+  \begin{center}
+  \small 
+  \begin{tabular}{@{}p{.15\linewidth}p{.13\linewidth}p{.12\linewidth}p{.12\linewidth}@{}}
+    \toprule
+    {\textbf{Scenario}} & {\textbf{Raw matches (SIFT)}} & {\textbf{Inliers F / Error (F)}} & {\textbf{Inliers H / Error (H)}} \\
+    \cmidrule(){1-4}
+  %   
+  \texttt{Container}  &  58 &  14 /  666.26 &   9 / 1767.55 \\ %   
+  \texttt{Highway}    &  49 &  15 / 1996.30 &   9 / 2210.20 \\ %      
+  \texttt{Pool1}      & 162 &  52 /    0.83 &  33 /    1.63 \\ % 
+  \texttt{Pool2}      & 107 &  18 /  618.54 &  10 / 1308.02 \\ %
+  \texttt{Eichenau1}  & 287 &  45 /   19.11 &  48 /    3.63 \\ %     
+  \texttt{Eichenau2}  & 436 & 140 /    1.11 & 146 /    3.64 \\ % 
+  \texttt{EOC}        & 446 &  16 /  959.87 &   6 /  877.21 \\ % 
+  \texttt{WV2}        & 117 &  19 /  175.73 &  19 /    4.03 \\ %
+  \texttt{Building}   & 553 &  16 /  595.06 &  11 /  317.59 \\ % 
+  \texttt{Googlemaps} & 522 &  19 /  195.34 &   8 /  919.48 \\
+  \bottomrule
+  \end{tabular}
+  \end{center}
+  \caption {Results using standard SIFT: number of raw matches after applying SIFT for all scenarios. Inliers after estimating fundamental matrix (F) and homography (H) using RANSAC. Mean errors (in pixel) according to ground-truth F and H.}
+\label{tab:Result_sift}
+\end{table}
+
+\begin{table}[t]
+  \begin{center}
+  \small 
+  \begin{tabular}{@{}p{.15\linewidth}p{.13\linewidth}p{.12\linewidth}p{.12\linewidth}@{}}
+    \toprule
+    {\textbf{Scenario}} & {\textbf{Raw matches (our)}} & {\textbf{Inliers F / Error (F)}} & {\textbf{Inliers H / Error (H)}} \\
+    \cmidrule(r){1-4}
+  %   
+  \texttt{Container}  &  8264 &  4876 / 2.59 & 2835 / 7.01 \\ %   
+  \texttt{Highway}    &  1979 &  1184 / 2.79 & 1230 / 1.20 \\ %      
+  \texttt{Pool1}      &  6593 &  3599 / 1.87 & 2188 / 1.87 \\ % 
+  \texttt{Pool2}      & 14091 &  7555 / 2.01 & 4199 / 2.03 \\ %
+  \texttt{Eichenau1}  &  4018 &  1850 / 4.35 & 1165 / 3.53 \\ %     
+  \texttt{Eichenau2}  &  5846 &  3204 / 1.09 & 3077 / 4.65 \\ % 
+  \texttt{EOC}        &  6834 &  3949 / 2.92 & 2586 / 3.18 \\ % 
+  \texttt{WV2}        & 15131 &  6290 / 2.22 & 6760 / 3.57 \\ %
+  \texttt{Building}   &  9113 &  3526 / 3.15 & 1932 / 2.36 \\ % 
+  \texttt{Googlemaps} & 15437 &  5120 / 3.42 & 3217 / 2.82 \\
+  \bottomrule
+  \end{tabular}
+  \end{center}
+  \caption {Results using proposed method: number of raw matches after applying our method for all scenarios. Inliers after estimating fundamental matrix (F) and homography (H) using RANSAC. Mean errors (in pixel) according to ground-truth F and H.}
+\label{tab:Result}
+\end{table}
+
+% \begin{table}[tbp]
+% \begin{center}
+% \footnotesize 
+%  \begin{tabular}{|c|c| c| c|}
+%  \hline
+%  \multirow{2}{*}{Scenario} & Raw matches  & Inliers (F) / & Inliers (H) / \\
+%   & (SIFT) &  Error (F) & Error (H) \\
+%  \hline \hline
+% \texttt{Container}  &  58 &  14 /  666.26 &    9 / 1767.55  \\ \hline
+% \texttt{Highway} 	&  49 &  15 / 1996.30 &    9 / 2210.20  \\ \hline
+% \texttt{Pool1} 		& 162 &  52 /    0.83 &   33 /    1.63  \\ \hline
+% \texttt{Pool2} 		& 107 &  18 /  618.54 &   10 / 1308.02  \\ \hline
+% \texttt{Eichenau1}  & 287 &  45 /   19.11 &   48 /    3.63  \\ \hline
+% \texttt{Eichenau2}  & 436 & 140 /    1.11 &  146 /    3.64  \\ \hline
+% \texttt{EOC} 	    & 446 &  16 /  959.87 &    6 /  877.21  \\ \hline
+% \texttt{WV2}   		& 117 &  19 /  175.73 &   19 /    4.03  \\ \hline
+% \texttt{Building}	& 553 &  16 /  595.06 &   11 /  317.59  \\ \hline
+% \texttt{Googlemaps} & 522 &  19 /  195.34 &    8 /  919.48  \\ 
+%  \hline 
+% \end{tabular}  
+% \end{center}
+% \caption {Results using standard SIFT: number of raw matches after applying SIFT for all scenarios. Inliers after estimating fundamental matrix (F) and homography (H) using RANSAC. Mean errors (in pixel) according to ground-truth F and H.}
+% \label{tab:Result_sift}
+% \end{table}
+
+% \begin{table}[tbp]
+% \begin{center}
+% \footnotesize 
+%  \begin{tabular}{|c|c| c| c|}
+%  \hline
+%  \multirow{2}{*}{Scenario} & Raw matches  & Inliers (F) / & Inliers (H) / \\
+%   & (our) &  Error (F) & Error (H) \\
+%  \hline \hline
+% \texttt{Container}  & 8264  & 4876 / 2.59 &   2835  / 7.01  \\ \hline
+% \texttt{Highway} 	& 1979  & 1184 / 2.79 &   1230 /  1.20  \\ \hline
+% \texttt{Pool1} 		&  6593 &  3599 / 1.87 &   2188 / 1.87  \\  \hline
+% \texttt{Pool2} 		& 14091 &  7555 / 2.01 &   4199 / 2.03  \\  \hline 
+% \texttt{Eichenau1}  &  4018 &  1850 / 4.35 &   1165 / 3.53  \\  \hline
+% \texttt{Eichenau2}  &  5846 &  3204 / 1.09 &   3077 / 4.65  \\  \hline
+% \texttt{EOC} 	    &  6834 &  3949 / 2.92 &   2586 / 3.18  \\  \hline
+% \texttt{WV2}        & 15131 &  6290 / 2.22 &   6760 / 3.57  \\ \hline
+% \texttt{Building}   &  9113 &  3526 / 3.15 &   1932 / 2.36  \\ \hline
+% \texttt{Googlemaps} & 15437 &  5120 / 3.42 &   3217 / 2.82  \\  
+%  \hline 
+% \end{tabular}  
+% \end{center}
+% \caption {Results using proposed method: number of raw matches after applying our method for all scenarios. Inliers after estimating fundamental matrix (F) and homography (H) using RANSAC. Mean errors (in pixel) according to ground-truth F and H.}
+% \label{tab:Result}
+% \end{table}
+
+
+Regarding matching accuracy, standard SIFT outperformed our method only at \texttt{Pool1} scenario. 
+As homography only considers transformation between two planes, those mismatches at areas with apparently different scene depths were discarded. 
+The mean transfer error were only 2-3 pixels in most cases, corresponding to a ground distance of about 20-30 cm.  
+
+The matched feature points are marked in the UAV images (the second and third rows in Figure \ref{fig:results}).
+As a result of the superpixel segmentation, most matches are located at regions with rich textures and have apparently much higher density than SIFT-features. 
+The projection transformations can then be estimated using these matches. 
+The first row in Figure \ref{fig:results} depicts the projected UAV images on the aerial images by the estimated homography.
+
+\begin{figure}[tbp]
+    \centering
+       \begin{subfigure}[b]{0.243\textwidth}
+           \centering
+           %\caption{Rural}
+           \includegraphics[width=\textwidth]{figures_matches/rural_fused.jpg}
+       \end{subfigure}
+       \hfill
+       \begin{subfigure}[b]{0.243\textwidth}  
+           \centering 
+          % \caption{Urban1}
+           \includegraphics[width=\textwidth]{figures_matches/eichenau_fused.jpg}
+       \end{subfigure}
+       \hfill
+       \begin{subfigure}[b]{0.243\textwidth}  
+           \centering 
+          % \caption{Pool}
+           \includegraphics[width=\textwidth]{figures_matches/pool_fused.jpg}
+       \end{subfigure}
+       \hfill
+       \begin{subfigure}[b]{0.243\textwidth}   
+           \centering 
+          % \caption{Building}
+           \includegraphics[width=\textwidth]{figures_matches/eoc_fused.jpg}
+       \end{subfigure}
+        \vskip\baselineskip
+       \begin{subfigure}[b]{0.243\textwidth}   
+           \centering 
+           \includegraphics[width=\textwidth]{figures_matches/container_Fmatch.jpg}
+       \end{subfigure}
+       \hfill
+       \begin{subfigure}[b]{0.243\textwidth}  
+           \centering 
+           \includegraphics[width=\textwidth]{figures_matches/eichenau_Fmatch.jpg}
+       \end{subfigure}
+       \hfill
+       \begin{subfigure}[b]{0.243\textwidth}   
+           \centering 
+           \includegraphics[width=\textwidth]{figures_matches/pool_Fmatch.jpg}
+       \end{subfigure}
+       \hfill
+       \begin{subfigure}[b]{0.243\textwidth}   
+           \centering 
+           %\includegraphics[width=\textwidth]{figures_matches/eoc_Fmatch.jpg}
+           \includegraphics[width=\textwidth]{figures_matches/eoc_gmaps_new_uav_Fmatch.jpg}
+       \end{subfigure}
+       \vskip\baselineskip
+       \begin{subfigure}[b]{0.243\textwidth}  
+           \centering 
+           \includegraphics[width=\textwidth]{figures_matches/highway_Fmatch.jpg}
+       \end{subfigure}
+       \hfill
+       \begin{subfigure}[b]{0.243\textwidth}   
+           \centering 
+           \includegraphics[width=\textwidth]{figures_matches/eichenau2_Fmatch.jpg}
+       \end{subfigure}
+       \hfill
+       \begin{subfigure}[b]{0.243\textwidth}   
+           \centering 
+           \includegraphics[width=\textwidth]{figures_matches/pool2_Fmatch.jpg}
+       \end{subfigure}
+       \hfill
+       \begin{subfigure}[b]{0.243\textwidth}  
+           \centering 
+           \includegraphics[width=\textwidth]{figures_matches/eoc_Fmatch.jpg}
+       \end{subfigure}
+   
+       \caption{Qualitative results of the proposed matching method according to the image pairs in Figure \ref{fig:datasets}. First row shows the overlapped UAV and aerial image pairs after applying an estimated homography calculated from our matches (also for the figure on the bottom right). Second and third row show the distribution of the geometrical correct matches in the UAV images (yellow dots).}
+       \label{fig:results}
+\end{figure}
+
+
+\subsection{Evaluation of Geo-registration of UAV Images}
+\label{ssec:georegistration}
+Following the proposed pipeline in Section \ref{ssec:registration}, plenty of 3D reference points were computed and then used as GCPs in a bundle block adjustment to geo-register the UAV images to the global coordinate frame.
+
+In order to verify the accuracy of geo-registration of UAV images, several evenly-distributed ground check points were selected across the survey area and their actual coordinates $P_{rtk}$ were measured using a RTK GNSS receiver. Meanwhile, these ground check points were marked in all UAV images and their theoretical 3D coordinates $P_{uav}$ were computed by triangulating the geo-registered UAV images. 
+The column ''$Error_{rtk}$" in Table \ref{tab:err_eichenau} and Table \ref{tab:err_germering} lists the errors $P_{uav}$ - $P_{rtk}$ of \texttt{Eichenau} and \texttt{Germering} datasets. 
+The height errors in ``$Error_{rtk}$" are around 2 meters, this is mainly caused by the systematic errors of the global digital elevation model like SRTM \cite{Rabus2003241}, which was used as height reference during the processing of the reference images. 
+
+In order to validate accuracy of co-registration, the coordinates triangulated by geo-registered UAV images, $P_{uav}$, were compared with the identical points on the reference image as well.
+In \texttt{Eichenau} dataset the reference image was an aerial orthophoto (with a high resolution DSM), so the corresponding coordinates $P_{ref}$ were manually looked up in the orthophoto and DSM, as explained in Section \ref{ssec:registration}.
+In \texttt{Germering} dataset the reference image was an individual aerial image from a pre-georeferenced aerial images dataset, so the corresponding coordinates $P_{ref}$ were triangulated using multiple pre-georeferenced aerial images from that dataset.  
+The column ''$Error_{ref}$" in Table \ref{tab:err_eichenau} and Table \ref{tab:err_germering} lists the error $P_{uav}$-$P_{ref}$. 
+
+
+\begin{table}[tbp]
+  \begin{center}
+  \small 
+  \begin{tabular}{@{}v{.05\linewidth}*{7}{l}@{}}
+    \toprule
+    \multicolumn{1}{@{}X}{\small \textbf{Check Point}} & \multicolumn{3}{X@{}}{\small  $\mathbf{Error_{ref} (m)}$} & \multicolumn{3}{X@{}}{\small $\mathbf{Error_{rtk} (m)}$} \\
+    \cmidrule(l){2-7}    & 
+    \multicolumn{1}{V{.06\linewidth}}{\small $\mathbf{\Delta x}$} & 
+    \multicolumn{1}{V{.06\linewidth}}{\small $\mathbf{\Delta y}$} & 
+    \multicolumn{1}{V{.06\linewidth}}{\small $\mathbf{\Delta z}$} & 
+    \multicolumn{1}{V{.06\linewidth}}{\small $\mathbf{\Delta x}$} & 
+    \multicolumn{1}{V{.06\linewidth}}{\small $\mathbf{\Delta y}$} & 
+    \multicolumn{1}{V{.06\linewidth}}{\small $\mathbf{\Delta z}$} \\
+    \cmidrule(){1-7}
+  %   
+  1	&  0.04	& -0.51	& -0.21	& -0.04	& -0.39	& -1.74 \\ %   
+  2	& -0.05	& -0.07	& -0.15	& -0.11	& -0.40	& -1.90	\\ %
+  3	&  0.04	& -0.41	& -0.36	& -0.10	& -0.83	& -2.04	\\ %
+  4	& -0.14	&  0.80	&  0.70	& -0.35	& -0.33	& -1.91	\\ %
+  5	& -0.04	&  0.49	& -0.17	& -0.05	& -0.21	& -1.81	\\ %
+  6	& -0.03	&  0.12	& -0.10	&  0.12	& -0.36	& -1.63	\\ 
+  \bottomrule
+  \end{tabular}
+  \end{center}
+  \caption {Errors of the coordinates of check points comparing to RTK GNSS measurements and the coordinates looked up in aerial orthophoto and DSM - \texttt{Eichenau} dataset.}
+\label{tab:err_eichenau}
+\end{table}
+
+
+
+% \begin{table}[tbp]
+% \begin{center}
+% \footnotesize 
+%     	\begin{tabular}[height=3cm]{|c|c| c|c|c| c|c|} \hline\multirow{2}{*}{Check Point} & \multicolumn{3}{c|}{$Error_{ref} (m)$}  & \multicolumn{3}{c|}{$Error_{rtk} (m)$}\\
+%   \cline{2-7}
+%   & $\Delta x$ & $\Delta y$ & $\Delta z$ & $\Delta x$ & $\Delta y$ & $\Delta z$ \\
+%  \hline \hline
+% 1	&	 0.04	&	-0.51	&	-0.21	&	-0.04	&	-0.39	&	-1.74	\\ \hline
+% 2	&	-0.05	&	-0.07	&	-0.15	&	-0.11	&	-0.40	&	-1.90	\\ \hline
+% 3	&	 0.04	&	-0.41	&	-0.36	&	-0.10	&	-0.83	&	-2.04	\\ \hline
+% 4	&	-0.14	&	0.80	&	0.70	&	-0.35	&	-0.33	&	-1.91	\\ \hline
+% 5	&	-0.04	&	0.49	&	-0.17	&	-0.05	&	-0.21	&	-1.81	\\ \hline
+% 6	&	-0.03	&	0.12	&	-0.10	&	0.12	&	-0.36	&	-1.63	\\ \hline
+% 		\end{tabular}
+% \end{center}
+% \caption {Errors of the check point coordinates comparing to RTK GNSS measurements and coordinates looked up in the aerial orthophoto and DSM - \texttt{Eichenau} dataset.}
+% \label{tab:err_eichenau}
+% \end{table}
+
+
+\begin{table}[tbp]
+  \begin{center}
+  \small 
+  \begin{tabular}{@{}v{.05\linewidth}*{7}{l}@{}}
+    \toprule
+    \multicolumn{1}{@{}X}{\small \textbf{Check Point}} & \multicolumn{3}{X@{}}{\small $\mathbf{Error_{ref} (m)}$} & \multicolumn{3}{X@{}}{\small $\mathbf{Error_{rtk} (m)}$} \\
+    \cmidrule(l){2-7}    & 
+    \multicolumn{1}{V{.06\linewidth}}{\small $\mathbf{\Delta x}$} & 
+    \multicolumn{1}{V{.06\linewidth}}{\small $\mathbf{\Delta y}$} & 
+    \multicolumn{1}{V{.06\linewidth}}{\small $\mathbf{\Delta z}$} & 
+    \multicolumn{1}{V{.06\linewidth}}{\small $\mathbf{\Delta x}$} & 
+    \multicolumn{1}{V{.06\linewidth}}{\small $\mathbf{\Delta y}$} & 
+    \multicolumn{1}{V{.06\linewidth}}{\small $\mathbf{\Delta z}$} \\
+    \cmidrule(){1-7}
+  %   
+  1	& -0.06	& -0.14	& -0.38	& 0.34 & -0.01 & 1.49 \\ %
+  2	&  0.16	& -0.67	&  0.37	& 0.43 & -0.54 & 1.68 \\ %
+  3	&  0.14	& -0.02	&  0.46	& 0.56 &  0.16 & 1.76 \\ %
+  4	&  0.11	& -0.76	&  0.26	& 0.44 & -0.76 & 1.71 \\ %
+  5	&  0.19	& -0.10	&  0.50	& 0.55 & -0.06 & 0.75 \\ %
+  6	& -0.05	&  0.18	&  0.18	& 0.39 &  0.36 & 1.30 \\ %
+  7	& -0.08	&  0.41	& -0.06	& 0.41 &  0.50 & 1.42 \\ 
+  \bottomrule
+  \end{tabular}
+  \end{center}
+  \caption {Errors of the coordinates of check points comparing to RTK GNSS measurements and the coordinates triangulated using aerial images - \texttt{Germering} dataset.}
+\label{tab:err_germering}
+\end{table}
+
+
+% \begin{table}[tbp]
+% \begin{center} 
+% \footnotesize 
+%     	\begin{tabular}[height=3cm]{|c|c| c|c|c| c|c|} \hline\multirow{2}{*}{Check Point} & \multicolumn{3}{c|}{$Error_{ref} (m)$}  & \multicolumn{3}{c|}{$Error_{rtk} (m)$}\\
+%   \cline{2-7}
+%   & $\Delta x$ & $\Delta y$ & $\Delta z$ & $\Delta x$ & $\Delta y$ & $\Delta z$ \\
+%  \hline \hline
+% 1	&	-0.06	&	-0.14	&	-0.38	&	0.34	&	-0.01	&	1.49	\\ \hline
+% 2	&	0.16	&	-0.67	&	0.37	&	0.43	&	-0.54	&	1.68	\\ \hline
+% 3	&	0.14	&	-0.02	&	0.46	&	0.56	&	0.16	&	1.76	\\ \hline
+% 4	&	0.11	&	-0.76	&	0.26	&	0.44	&	-0.76	&	1.71	\\ \hline
+% 5	&	0.19	&	-0.10	&	0.50	&	0.55	&	-0.06	&	0.75	\\ \hline
+% 6	&	-0.05	&	0.18	&	0.18	&	0.39	&	0.36	&	1.30	\\ \hline
+% 7	&	-0.08	&	0.41	&	-0.06	&	0.41	&	0.50	&	1.42	\\ \hline
+% 		\end{tabular}
+% \end{center}
+% \caption {Errors of the check point coordinates comparing to RTK GNSS measurements and coordinates triangulated using aerial images - \texttt{Germering} dataset.}
+% \label{tab:err_germering}
+% \end{table}
+
+
+Afterwards the orthophoto and DSM were reconstructed from the geo-registered UAV images using the software SURE \cite{rothermel2012sure}.
+Figure \ref{fig:ortho_eichenau} illustrates the aerial orthophoto and the UAV orthophoto of \texttt{Eichenau} dataset.
+More specifically, (a) depicts the aerial orthophoto of the \texttt{Eichenau} dataset, whose resolution is $\SI{20}{\cm}$; (b) shows the UAV orthophoto of the \texttt{Eichenau} dataset, whose resolution is $\SI{2}{\cm}$.
+It is obvious that the UAV orthophoto has higher resolution and contains more details than the aerial orthophoto.
+(c) displays the UAV orthophoto overlapping on the aerial orthophoto with $50$\% transparency, it can be seen that the the two orthophotos are precisely aligned using the proposed geo-registration method.
+(d) and (e), (f) and (g) compare the appearance of corresponding objects on aerial orthophoto and UAV orthophoto, demonstrating that the UAV orthophoto contains richer textures than the aerial orthophoto. 
+Figure \ref{fig:campos} illustrates the estimated camera poses as well as the reconstructed point cloud of the geo-registered UAV image blocks and the aerial image blocks. Despite the considerable scale difference, our matching approach still succeeds in an accurate registration. Similarly, Figure \ref{fig:ortho_germering} demonstrates the aerial orthophoto and UAV orthophoto of \texttt{Germering} dataset, whose resolutions are 20cm and 2cm respectively.
+\begin{figure}[tbp]
+    \centering
+       \begin{subfigure}[b]{0.32\columnwidth}
+           \centering
+           \includegraphics[width=\textwidth]{figures_5/eichenau_ortho_aerial.jpg}
+           {{\small }}    
+           \centerline{\small{(a)}}\medskip
+       \end{subfigure}
+       \hfill
+       \begin{subfigure}[b]{0.32\columnwidth}  
+           \centering 
+           \includegraphics[width=\textwidth]{figures_5/eichenau_ortho_uav.jpg}           
+           {{\small }}    
+           \centerline{\small{(b)}}\medskip
+       \end{subfigure}
+       \hfill
+       \begin{subfigure}[b]{0.32\columnwidth}
+           \centering
+           \includegraphics[width=\textwidth]{figures_5/eichenau_ortho_overlap.jpg}
+           {{\small }}    
+           \centerline{\small{(c)}}\medskip
+       \end{subfigure}
+       \begin{subfigure}[tbp]{0.236\columnwidth}
+           \centering
+           \includegraphics[width=\textwidth]{figures_5/eichenau_car_aerial.png}
+           {{\small }}    
+           \centerline{\small{(d)}}\medskip
+       \end{subfigure}
+       \hfill
+       \begin{subfigure}[tbp]{0.236\columnwidth}
+           \centering
+           \includegraphics[width=\textwidth]{figures_5/eichenau_car_uav.png}
+           {{\small }}    
+           \centerline{\small{(e)}}\medskip
+       \end{subfigure} 
+       \hfill
+       \begin{subfigure}[tbp]{0.236\columnwidth}
+           \centering
+           \includegraphics[width=\textwidth]{figures_5/eichenau_roof_aerial.png}
+           {{\small }}    
+           \centerline{\small{(f)}}\medskip
+       \end{subfigure}
+       \hfill
+       \begin{subfigure}[tbp]{0.236\columnwidth}
+           \centering
+           \includegraphics[width=\textwidth]{figures_5/eichenau_roof_uav.png}
+           {{\small }}    
+           \centerline{\small{(g)}}\medskip
+       \end{subfigure}          
+       \caption{Comparison of (a) aerial orthophoto with 20cm GSD and (b) UAV orthophoto with 2cm GSD of the \texttt{Eichenau} dataset. (c) 50\% transparent overlap of both orthophotos; (d) and (e) compare cars and (f) and (g) show a roof on aerial and UAV orthophoto respectively.}
+       \label{fig:ortho_eichenau}
+\end{figure}
+
+
+\begin{figure}[tbp]
+	\centering
+	\includegraphics[width=0.6\textwidth]{figures_5/cams_side.png}
+	{{\small }} 
+    \caption{Camera pose visualization for \texttt{Eichenau} dataset, showing camera poses (red) of the geo-registered UAV image blocks at 100m altitude and  the aerial image (black) blocks at 600 m altitude.}
+    \label{fig:campos}
+\end{figure}
+
+
+\begin{figure}[tbp]
+    \centering
+       \begin{subfigure}[tbp]{0.24\columnwidth}
+           \centering
+           \includegraphics[width=\textwidth]{figures_5/germering_ortho_aerial.jpg}
+           {{\small }}    
+           \centerline{\small{(a)}}\medskip
+       \end{subfigure}
+       \hfill
+       \begin{subfigure}[tbp]{0.24\columnwidth}  
+           \centering 
+           \includegraphics[width=\textwidth]{figures_5/germering_ortho_uav.jpg}           
+           {{\small }}    
+           \centerline{\small{(b)}}\medskip
+       \end{subfigure}
+       \hfill
+       \begin{subfigure}[tbp]{0.243\columnwidth}
+           \centering
+           \includegraphics[width=\textwidth]{figures_5/germering_pool_aerial.jpg}
+           {{\small }}    
+           \centerline{\small{(c)}}\medskip
+       \end{subfigure}
+        \hfill
+       \begin{subfigure}[tbp]{0.243\columnwidth}
+           \centering
+           \includegraphics[width=\textwidth]{figures_5/germering_pool_uav.jpg}
+           {{\small }}    
+           \centerline{\small{(d)}}\medskip
+       \end{subfigure}
+       \begin{subfigure}[tbp]{0.241\columnwidth}
+           \centering
+           \includegraphics[width=\textwidth]{figures_5/germering_manhole_aerial.png}
+           {{\small }}    
+           \centerline{\small{(e)}}\medskip
+       \end{subfigure}
+        \hfill
+       \begin{subfigure}[tbp]{0.241\columnwidth}
+           \centering
+           \includegraphics[width=\textwidth]{figures_5/germering_manhole_uav.png}
+           {{\small }}    
+           \centerline{\small{(f)}}\medskip
+       \end{subfigure} 
+        \hfill
+       \begin{subfigure}[tbp]{0.241\columnwidth}
+           \centering
+           \includegraphics[width=\textwidth]{figures_5/germering_stair_aerial.png}
+           {{\small }}    
+           \centerline{\small{(g)}}\medskip
+       \end{subfigure}
+        \hfill
+       \begin{subfigure}[tbp]{0.241\columnwidth}
+           \centering
+           \includegraphics[width=\textwidth]{figures_5/germering_stair_uav.png}
+           {{\small }}    
+           \centerline{\small{(h)}}\medskip
+       \end{subfigure}       
+       \caption{Comparison of (a + c) aerial orthophotos with 20cm GSD and (b + d) UAV orthophotos with 2cm GSD of the \texttt{Germering} dataset; (e) and (f) compare a manhole and (g) and (h) staircases on aerial and UAV orthophoto respectively.}
+       \label{fig:ortho_germering}
+\end{figure}
+
+Figure \ref{fig:dsm_eichenau} and Figure \ref{fig:dsm_germering} illustrate the aerial DSMs with $\SI{20}{\cm}$ resolution and UAV DSMs with $\SI{2}{\cm}$ resolution of \texttt{Eichenau} and \texttt{Germering} dataset respectively. The aerial DSM in (a) has blurred edge and inadequate details while the UAV DSM in (b) represent more refined details and sharper edges.
+Then the UAV DSM was resampled by bilinear interpolation to the same resolution of the aerial DSM and their height differences were calculated.
+(c) illustrates the colorized height differences ranging from $\SI{-5}{\m}$ to $\SI{5}{\m}$, and it is apparent that the errors are mostly smaller than $\SI{1}{\m}$.
+Note that the two red and one blue spots on the container site in Figure \ref{fig:dsm_germering}(c) indicate movements of the containers due to different acquisition times of the captured images.
+In this sense, our matching method is able to cope with such temporal changes in scene.
+Figure \ref{fig:dsm_errs} shows the histograms of the height differences for both datasets.
+
+\begin{figure}[bph]
+    \centering
+       \begin{subfigure}[b]{0.3\columnwidth}
+           \centering
+           \includegraphics[width=\textwidth]{figures_5/eichenau_dsm_4k_rot.png}
+           {{\small }}    
+           \centerline{\small{(a) Aerial DSM}}\medskip
+       \end{subfigure}
+       \hfill
+       \begin{subfigure}[b]{0.3\columnwidth}  
+           \centering 
+           \includegraphics[width=\textwidth]{figures_5/eichenau_dsm_uav_rot.png}         
+           {{\small }}    
+           \centerline{\small{(b) UAV DSM}}\medskip
+       \end{subfigure}
+       \hfill
+       \begin{subfigure}[b]{0.35\columnwidth}
+           \centering
+           \includegraphics[width=\textwidth]{figures_5/eichenau_dsm_dif_rot.png}
+           {{\small }}    
+           \centerline{\small{(c) DSM differences}}\medskip
+       \end{subfigure}
+       \caption{Comparison of (a) aerial and (b) UAV DSM of \texttt{Eichenau} dataset. $\SI{20}{\cm}$ GSD for aerial and $\SI{2}{\cm}$ GSD for UAV DSM; (c) colormap illustrating the height differences between the two DSMs in meters.}
+       \label{fig:dsm_eichenau}
+\end{figure}
+
+\begin{figure}[tbp]
+    \centering
+       \begin{subfigure}[b]{0.3\columnwidth}
+           \centering
+           \includegraphics[width=\textwidth]{figures_5/germering_dsm_aerial.jpg}
+           {{\small }}    
+           \centerline{\small{(a) Aerial DSM}}\medskip
+       \end{subfigure}
+       \hfill
+       \begin{subfigure}[b]{0.3\columnwidth}  
+           \centering 
+           \includegraphics[width=\textwidth]{figures_5/germering_dsm_uav_meitu.jpg}         
+           {{\small }}    
+           \centerline{\small{(b) UAV DSM}}\medskip
+       \end{subfigure}
+       \hfill
+       \begin{subfigure}[b]{0.35\columnwidth}
+           \centering
+           \includegraphics[width=\textwidth]{figures_5/germering_dsm_dif.jpg}
+           {{\small }}    
+           \centerline{\small{(c) DSM differences}}\medskip
+       \end{subfigure}
+       \caption{Comparison of (a) aerial and (b) UAV DSM of \texttt{Germering} dataset. $\SI{20}{\cm}$ GSD for aerial and $\SI{2}{\cm}$ GSD for UAV DSM; (c) colormap illustrating the height differences between the two DSMs in meters.}
+       \label{fig:dsm_germering}
+\end{figure}
+
+\begin{figure}[tbp]
+     %centering
+       \begin{subfigure}[c]{0.5\linewidth}
+	       \centering
+			\input{tikz/dsm_error_eichenau.tikz}
+			\caption{\label{fig:1} \texttt{Eichenau}}
+       \end{subfigure}
+       %\hspace{1.5cm}
+       \begin{subfigure}[c]{0.5\linewidth}  
+	       \centering
+			\input{tikz/dsm_error_germering.tikz}
+			\caption{\label{fig:1} \texttt{Germering}}
+       \end{subfigure}
+       \caption{Histograms of the height differences between the aligned DSMs generated from UAV and aerial images.}
+       \label{fig:dsm_errs}
+\end{figure}
+
+\subsection{Application Scenario: Enriching 3D Building Models}
+\label{ssec:application}
+The \texttt{EOC} dataset represents an urban scene, demonstrating the benefits of a joint use of aerial and UAV imagery.
+Figure \ref{fig:eoc_pc}(a) displays a dense georeferenced 3D point cloud generated solely from aerial images. Since the aerial images only contain nadir views of the scene, the reconstructed building fa\c{c}ades are not complete, which is a typical problem for aerial photogrammetry.
+
+We automatically geo-registered a sequence of nadir-view UAV images (see result for one image pair in Table \ref{tab:Result}) to the aerial images.
+In addition, we also registered oblique UAV images facing the fa\c{c}ades of the building to the already geo-registered UAV nadir views in a conventional photogrammetric way.
+Afterwards, a dense 3D point cloud was generated using all of the geo-registered UAV images, resulting in a complete reconstruction of the building with a much higher GSD than the aerial point cloud.
+The accurate geo-registration of the UAV images enables us to merge the UAV and aerial point cloud and leads to a comprehensive representation of the scene, as illustrated in Figure \ref{fig:eoc_pc}(b).
+It can be seen that the UAV point cloud is precisely aligned with the aerial point cloud.
+While the aerial point cloud covers a large area of the scene, the UAV point cloud contributes to information of the building fa\c{c}ades (particularly at positions indicated by yellow arrows) and enriched details of the reconstructed building.
+
+
+% Only the nadir-view images of the \texttt{EOC} dataset were matched with aerial images, generating thousands of GCPs. 
+% Those points were used to align the whole UAV image block, including both nadir-view and oblique-view images, to the georeferenced aerial images. 
+% Afterwards, a 3D point cloud were reconstructed using all the UAV images. 
+% The accurate geo-registration enables us to merge the UAV and aerial point cloud, resulting in a comprehensive representation of the scene.
+% Figure \ref{fig:eoc_pc}(a) displays the point cloud generated from aerial images, which contains only nadir view of the building but little information of the fa\c{c}ade, as this is typical for aerial photogrammetry.
+% By contrast, the UAV point cloud contains not only nadir view but also oblique looking images, representing a more compressive detailed description of the scene, as illustrated in (b). 
+% It can be seen that the UAV point cloud are precisely aligned with the aerial point cloud; additionally, the UAV point cloud contributes to rise the level of detail and to enrich details of the building fa\c{c}ades particularly at positions indicated by yellow arrows.
+
+\begin{figure}[tbp]
+    \centering
+       \begin{subfigure}[b]{0.496\columnwidth}
+           \centering
+           \includegraphics[width=\textwidth]{figures_5/eoc_pc_aerial.jpg}
+           {{\small }}    
+           \centerline{\small{(a) Aerial point cloud }}\medskip
+       \end{subfigure}
+       \hfill
+       \begin{subfigure}[b]{0.495\columnwidth}  
+           \centering 
+           \includegraphics[width=\textwidth]{figures_5/eoc_pc_fused.jpg}         
+           {{\small }}    
+           \centerline{\small{(b) Merged point cloud}}\medskip
+       \end{subfigure}
+       {{\small }} 
+       \caption{Comparison of the dense point clouds for (a) only aerial images and (b) additional registered nadir and oblique UAV images of the \texttt{EOC} dataset. The combination of aerial and UAV images can enrich 3D models for more details and add fa\c{c}ades to buildings. }
+       \label{fig:eoc_pc}
+\end{figure}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Discussion}
+\label{sec:disc}
+
+%The proposed method involves these innovative aspects:
+%\begin{enumerate}
+%\item A robust matching approach comprised of a new feature detection scheme, a one-to-many matching scheme and a histogram-based geometric verification of putative matching correspondences.
+%\item UAV geo-registration using the verified matches with georeferenced imagery.
+%\end{enumerate}
+% This paper investigates into UAV geo-registration by matching the UAV image with georeferenced imagery, e.g., aerial images, aerial orthophotos or satellite images. 
+% As demonstrated in Section \ref{sec:Analysis}, the biggest challenge for matching UAV and aerial images is the substantial differences in their scales and rotations. Though this difference can be roughly eliminated using the preliminary information from the GNSS/IMU, the UAV images and the reference image still differ in terms of illumination, temporal change or sensor characteristics. As a consequence, the state-of-the-art SIFT and ASIFT methods fail to find reliable matches. In contrast, the proposed method is able to find plenty of correct matches even for images with low textures or repetitive patterns. Our method outperforms standard SIFT/ASIFT for the following reasons:
+% \begin{itemize}
+% \item Instead of relying on blob detectors like SIFT features, we implement image segmentation and extract boundaries of the superpixels to achieve a denser feature point extraction. 
+% \item We adopt a one-to-many matching scheme for the feature descriptors rather than one-to-one matching, resulting in a large amount of putative matches.
+% \item We substitute the commonly used ratio-test in SIFT by the global geometric constraint, which will not be disturbed by local repetitive features. As a consequent, correct matches can still be detected even at repetitive image regions.
+% \end{itemize}
+Our method achieves robust and accurate co-registration of images acquired from different acquisition platforms, thus opening up the possibility to integrate the information from multi-source images and achieve a more comprehensive understanding of the scene.
+Besides, repetitive image acquisition with manned aircrafts or satellites is quite expensive whereas it is convenient to perform with UAVs. The robust registration enables timely update of pre-existing remote sensing data using UAVs, which can also be applied in environment monitoring and change detection. 
+%When the reference image is georeferenced, the verified matches can then be used to geo-register the UAV images in a bundle block adjustment. The accuracy of geo-registration is evaluated by 1) comparing with manually selected check points, which leads to accuracies around 1-3 GSD of the reference image and 2) comparing with ground-truth data measured by RTK GNSS, which leads to about $\SI{0.5}{\m}$ horizontal and $\SI{1.5}{m}$ vertical accuracy. The height errors are mainly caused by the systematic errors of the global elevation model, which is the basis of our aerial image processing. 
+
+The main limitation of our method is that it only works for nadir or slightly tilted images. 
+When a conspicuous height jump exists, the histogram may present multiple peaks, e.g., one representing matches on the ground-level and one matches on a higher level (like roofs).
+Therefore manual inspection is needed in this case. 
+Moreover, it is difficult to determine the translation threshold $R$ if the scene depth changes continuously in the image. 
+As listed in the first column of Table \ref{tab:Result}, there were remarkable fewer raw matches in the \texttt{Highway} scenario than in the other ones due to topographic changes.
+Also, those scenarios containing various scene depths (e.g. \texttt{Container} and \texttt{Eichenau}) resulted in wrong tilts when estimating the homography, leading to higher mean transfer errors (up to 7 pixels) compared to the scenarios with flat landscape.
+
+
+% All in all, related with the georeferencing accuracy of the reference image, our method can generally achieve much higher global geo-registration accuracy than conventional direct georeferencing using on-board GNSS/IMU.  
+
+% Now that there is open access to various geo-databases with different accuracy, such as national or city geographic maps, aerial images, orthophotos and satellite images, image matching approaches facilitate a cheap and accurate geo-registration of UAV images in an automatic and widely applicable way.
+% Therefore, accurate and reliable image registration is indispensable to achieve suitable georeferencing accuracy.
+%The decision can be made according to the need for accuracy and the availability of geo-database.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Conclusion}
+\label{sec:conclusion}
+This paper investigates into UAV geo-registration by matching UAV images with already georeferenced aerial imagery. 
+On the basis of an extensive analysis why SIFT performs poorly for this kind of image pairs, a robust image matching approach is proposed to deliver a large number of reliable matching correspondences between the UAV and a reference image. 
+The method is comprised of a novel feature detector, a one-to-many matching strategy and a global geometric constraint for outliers detection. 
+The prerequisite of our proposed method is the availability of rough GNSS/IMU data of the UAV images to eliminate scale differences in the images and if possible to pre-align the images with the respect to the image rotation, although an extension of the method can handle unknown or imprecise image rotations.
+
+Experimental results prove that our method outperforms SIFT/ASIFT in the aspects of quantity and accuracy of the detected matches. 
+These matches are used to align UAV image blocks towards the reference images in a bundle block adjustment, which achieves a registration accuracy of $1-3$ GSD. 
+A global accuracy evaluation of 3D points from geo-registered UAV images and terrestrial measurements from RTK GNSS show $\SI{0.5}{\m}$ horizontal $\SI{1.5}{\m}$ vertical deviations, which mainly stem from inaccurate georeferencing accuracy of the reference image.
+
+
+

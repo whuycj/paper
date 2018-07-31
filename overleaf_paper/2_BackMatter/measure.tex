@@ -1,0 +1,61 @@
+\chapter{Used Measures}
+\section{Recognition Accuracy Rate}
+The recognition accuracy rate (ACC) is calculated in the case that pre-defined segments are available and only a classification for these segments have to be performed. It is used for all corpuses, as the annotations are either based on segments or boundaries are defined. Therefore, segments can be extracted from the data via the annotation. The ACC is calculated by counting all the correct classified segments and dividing the number by the total count of segments. A high ACC points out that the classifiers work well.
+\begin{equation*}
+	\textrm{ACC} = \frac{\textrm{number of correct classified segments}}{\textrm{total number of segments}} \times 100\%.
+\end{equation*}
+
+\section{F-Measure}
+For the calculation of the f-measure, recall and precision have to be evaluated first. These measures are helpful to identify the performance for each of the classes separately and to identify which classes can be distinguished. Precision can be seen as a measure of fidelity, whereas recall is a measure of completeness. The f-measure is the harmonic mean of precision and recall. For the calculation, the number of relevant segments, which are taken from the annotation of the class, and the number of retrieved segments, which are taken from the classification results of the class, are needed. These scores are calculated for the ABC corpus only. All these measures are in a range between $0$ and $1$. The best score of them is $1$.
+\begin{equation*}
+	\textrm{Recall}=\frac{\left| \textrm{number of relevant segments} \cap \textrm{number of retrieved segments} \right|}{\left| \textrm{number of relevant segments} \right|}
+\end{equation*}
+\begin{equation*}
+	\textrm{Precision}=\frac{\left| \textrm{number of relevant segments} \cap \textrm{number of retrieved segments} \right|}{\left| \textrm{number of retrieved segments} \right|}
+\end{equation*}
+\begin{equation*}
+	\textrm{f-measure}=2 \times \frac{\textrm{Recall} \times \textrm{Precision}}{\textrm{Recall}+\textrm{Precision}}
+\end{equation*}
+
+\section{Frame Error Rate}
+The frame error rate (FER) is used for the evaluation of videos which have to be segmented. This is necessary for the meeting corpus, as the meetings are not pre-segmented. The measure gives an impression of the quality of the automatically segmented and classified meeting. Compared to the first two measures, which do not take into account any sequence of segments, the sequence and the correct boundaries are important to achieve a good score. Each frame is compared with the annotation and if a mismatch is detected the number of wrong classified frames is increased. If all frames are compared, this number is divided by the total number of available frames. As it is an error rate, lower scores are better. The best performance whould be $0$, which means that all frames are classified correctly.
+\begin{equation*}
+	\textrm{FER} = \frac{\textrm{number of wrong classified frames}}{\textrm{total number of frames}} \times 100\%.
+\end{equation*}
+
+\section{Action Error Rate}
+The action error rate (AER) is again used for the evaluation of automatically segmented data. Compared to the frame error rate, only the sequence of classified segments are taken into account. This means, that the boundaries between two segments are not necessarily at the correct point of time. If the sequence does not match, it is checked if additional segments are added (Insertions), if segments have been removed (Deletions) or if a segment has been replaced by another one (Substitutions). The sum of these is divided by the total number of annotated segments. The best AER is $0$, which does not necessarily mean that the output is good, because only the sequence is correct, but the boundaries have not to be at the correct point of time. An upper limit does not exist, as the number of insertions, deletions and substitutions can be higher than the total number of annotated segments. 
+\begin{equation*}
+	\textrm{AER} = \frac{\textrm{Insertions} + \textrm{Deletions} + \textrm{Substitutions}}{\textrm{number of annotated segments}} \times 100\%.
+\end{equation*}
+
+\section{Recognition Accuracy Rate}
+The recognition accuracy rate (ACC) is calculated in the case that pre-defined segments are available and only a classification for these segments have to be performed. It is used for all corpuses, as the annotations are either based on segments or boundaries are defined. Therefore, segments can be extracted from the data via the annotation. The ACC is calculated by counting all the correct classified segments and dividing the number by the total count of segments. A high ACC points out that the classifiers work well.
+\begin{equation*}
+	\textrm{ACC} = \frac{\textrm{number of correct classified segments}}{\textrm{total number of segments}} \times 100\%.
+\end{equation*}
+
+\section{F-Measure}
+For the calculation of the f-measure, recall and precision have to be evaluated first. These measures are helpful to identify the performance for each of the classes separately and to identify which classes can be distinguished. Precision can be seen as a measure of fidelity, whereas recall is a measure of completeness. The f-measure is the harmonic mean of precision and recall. For the calculation, the number of relevant segments, which are taken from the annotation of the class, and the number of retrieved segments, which are taken from the classification results of the class, are needed. These scores are calculated for the ABC corpus only. All these measures are in a range between $0$ and $1$. The best score of them is $1$.
+\begin{equation*}
+	\textrm{Recall}=\frac{\left| \textrm{number of relevant segments} \cap \textrm{number of retrieved segments} \right|}{\left| \textrm{number of relevant segments} \right|}
+\end{equation*}
+\begin{equation*}
+	\textrm{Precision}=\frac{\left| \textrm{number of relevant segments} \cap \textrm{number of retrieved segments} \right|}{\left| \textrm{number of retrieved segments} \right|}
+\end{equation*}
+\begin{equation*}
+	\textrm{f-measure}=2 \times \frac{\textrm{Recall} \times \textrm{Precision}}{\textrm{Recall}+\textrm{Precision}}
+\end{equation*}
+
+\section{Frame Error Rate}
+The frame error rate (FER) is used for the evaluation of videos which have to be segmented. This is necessary for the meeting corpus, as the meetings are not pre-segmented. The measure gives an impression of the quality of the automatically segmented and classified meeting. Compared to the first two measures, which do not take into account any sequence of segments, the sequence and the correct boundaries are important to achieve a good score. Each frame is compared with the annotation and if a mismatch is detected the number of wrong classified frames is increased. If all frames are compared, this number is divided by the total number of available frames. As it is an error rate, lower scores are better. The best performance whould be $0$, which means that all frames are classified correctly.
+\begin{equation*}
+	\textrm{FER} = \frac{\textrm{number of wrong classified frames}}{\textrm{total number of frames}} \times 100\%.
+\end{equation*}
+
+\section{Action Error Rate}
+The action error rate (AER) is again used for the evaluation of automatically segmented data. Compared to the frame error rate, only the sequence of classified segments are taken into account. This means, that the boundaries between two segments are not necessarily at the correct point of time. If the sequence does not match, it is checked if additional segments are added (Insertions), if segments have been removed (Deletions) or if a segment has been replaced by another one (Substitutions). The sum of these is divided by the total number of annotated segments. The best AER is $0$, which does not necessarily mean that the output is good, because only the sequence is correct, but the boundaries have not to be at the correct point of time. An upper limit does not exist, as the number of insertions, deletions and substitutions can be higher than the total number of annotated segments. 
+\begin{equation*}
+	\textrm{AER} = \frac{\textrm{Insertions} + \textrm{Deletions} + \textrm{Substitutions}}{\textrm{number of annotated segments}} \times 100\%.
+\end{equation*}
+

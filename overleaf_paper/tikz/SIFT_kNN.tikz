@@ -1,0 +1,136 @@
+% This file was created by matlab2tikz.
+%
+%The latest updates can be retrieved from
+%  http://www.mathworks.com/matlabcentral/fileexchange/22022-matlab2tikz-matlab2tikz
+%where you can also make suggestions and rate matlab2tikz.
+%
+\begin{tikzpicture}
+
+\begin{axis}[%
+width=.6\linewidth,
+height=.15\textheight,
+scale only axis,
+unbounded coords=jump,
+xmin=1,
+xmax=100,
+xlabel style={font=\color{white!15!black}},
+xlabel={Number of nearest neighbors},
+ymin=0,
+ymax=500,
+ytick={ 0, 100, 200 , 300, 400, 500},
+ylabel style={font=\color{white!15!black}},
+label style={font=\small},
+tick label style={font=\small},
+ylabel={Number of correct matches},
+ylabel near ticks,
+label style={font=\small},
+tick label style={font=\small},
+axis background/.style={fill=white},
+axis x line*=bottom,
+axis y line*=left
+]
+\addplot [color=blue,thick, forget plot]
+  table[row sep=crcr]{%
+1	72  \\
+2	93  \\
+3	110 \\
+4	123 \\
+5	136 \\
+6	145 \\
+7	153 \\
+8	159 \\
+9	170 \\
+10	179 \\
+11	188 \\
+12	194 \\
+13	197 \\
+14	201 \\
+15	206 \\
+16	210 \\
+17	215 \\
+18	219 \\
+19	227 \\
+20	230 \\
+21	238 \\
+22	244 \\
+23	253 \\
+24	255 \\
+25	258 \\
+26	259 \\
+27	264 \\
+28	266 \\
+29	270 \\
+30	271 \\
+31	274 \\
+32	277 \\
+33	282 \\
+34	287 \\
+35	296 \\
+36	299 \\
+37	303 \\
+38	310 \\
+39	313 \\
+40	317 \\
+41	317 \\
+42	320 \\
+43	325 \\
+44	327 \\
+45	330 \\
+46	334 \\
+47	334 \\
+48	337 \\
+49	339 \\
+50	341 \\
+51	344 \\
+52	346 \\
+53	349 \\
+54	350 \\
+55	354 \\
+56	359 \\
+57	359 \\
+58	362 \\
+59	364 \\
+60	369 \\
+61	372 \\
+62	378 \\
+63	381 \\
+64	383 \\
+65	383 \\
+66	385 \\
+67	390 \\
+68	392 \\
+69	397 \\
+70	401 \\
+71	406 \\
+72	408 \\
+73	408 \\
+74	412 \\
+75	413 \\
+76	415 \\
+77	418 \\
+78	421 \\
+79	421 \\
+80	424 \\
+81	426 \\
+82	428 \\
+83	432 \\
+84	435 \\
+85	440 \\
+86	443 \\
+87	446 \\
+88	449 \\
+89	451 \\
+90	453 \\
+91	458 \\
+92	460 \\
+93	461 \\
+94	463 \\
+95	465 \\
+96	468 \\
+97	468 \\
+98	472 \\
+99	476 \\
+100	478 \\
+};
+\end{axis}
+\end{tikzpicture}%
